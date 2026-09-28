@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="pt-build" content="2569-09-29.1">
+<meta name="theme-color" content="#0d6e66">
+<title>ระบบจัดการตารางเวร Part Time</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Anuphan:wght@500;600;700&family=IBM+Plex+Sans+Thai:wght@400;500;600&display=swap" rel="stylesheet">
+<link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
+<link rel="stylesheet" href="style.css?v=2569-09-29.1">
+</head>
+<body>
+
+<div id="progress"></div>
+<div class="toast" id="toast"></div>
+
+<!-- ============ เข้าสู่ระบบ ============ -->
+<div id="login" hidden>
+  <div class="lgcard">
+    <section class="lgart">
+      <div>
+        <div class="kicker">Part Time Duty · ฝ่ายการพยาบาล</div>
+        <h2>ระบบจัดการตารางเวร<br>Part Time</h2>
+      </div>
+      <ul>
+        <li><i class="bi bi-calendar2-week"></i><span>ลงตารางเวรทุกหน่วยงานในระบบเดียว ระบุหน่วยที่ไปปฏิบัติรายวัน</span></li>
+        <li><i class="bi bi-shield-check"></i><span>คุมกรอบเวรอัตโนมัติ และกันการลงเวรที่หน่วยต้นสังกัดของตนเอง</span></li>
+        <li><i class="bi bi-fingerprint"></i><span>ตรวจเวลาสแกนนิ้วเข้า–ออก ให้ชั่วโมงครบตามเวร</span></li>
+        <li><i class="bi bi-file-earmark-spreadsheet"></i><span>ออกเอกสารตารางเวร รายงานหน่วยปฏิบัติงาน และไฟล์ HRMi</span></li>
+      </ul>
+      <div class="clock"><b id="lgTime">--:--</b><span id="lgDate"></span></div>
+    </section>
+    <section class="lgform">
+      <h3>เข้าสู่ระบบ</h3>
+      <p class="s">ใช้รหัสพนักงานและรหัสผ่านของท่าน</p>
+      <div id="lgMsg"></div>
+      <form id="fLogin" autocomplete="on">
+        <div class="field">
+          <label class="fl" for="lgCode">รหัสพนักงาน</label>
+          <input id="lgCode" inputmode="numeric" autocomplete="username" required>
+        </div>
+        <div class="field">
+          <label class="fl" for="lgPw">รหัสผ่าน</label>
+          <input id="lgPw" type="password" autocomplete="current-password" required>
+        </div>
+        <label class="chk" style="margin-bottom:.9rem"><input type="checkbox" id="lgRem"> จำรหัสพนักงานไว้</label>
+        <button class="btn btn-pri btn-lg" style="width:100%" id="lgBtn" type="submit">เข้าสู่ระบบ</button>
+      </form>
+      <p class="s" style="margin-top:1rem">เข้าใช้ครั้งแรก: รหัสผ่านคือรหัสพนักงานของท่าน ระบบจะให้ตั้งรหัสใหม่ทันที<br>
+        ลืมรหัสผ่าน กรุณาติดต่อ<span id="lgOwner"> งานบริหารเงินเดือนฯ ฝ่ายทรัพยากรบุคคล</span></p>
+      <div class="credit" id="lgVer" style="padding-bottom:0"></div>
+    </section>
+  </div>
+</div>
+
+<!-- ============ ตัวระบบ ============ -->
+<div id="app">
+  <div class="shell">
+    <aside class="side" id="side">
+      <div class="side-top">
+        <div class="logo">PT</div>
+        <div><b>ตารางเวร PT</b><span>ฝ่ายการพยาบาล</span></div>
+      </div>
+      <nav class="menu" id="menu"></nav>
+      <div class="side-foot">
+        <b id="meName">—</b>
+        <span id="meRole"></span>
+        <div style="margin-top:.5rem;display:flex;gap:.35rem">
+          <button class="btn btn-sm" id="btnTheme" title="สลับโหมดกลางวัน/กลางคืน"><i class="bi bi-moon-stars"></i></button>
+          <button class="btn btn-sm" id="btnPw" title="เปลี่ยนรหัสผ่าน"><i class="bi bi-key"></i></button>
+          <button class="btn btn-sm" id="btnOut" title="ออกจากระบบ"><i class="bi bi-box-arrow-right"></i></button>
+        </div>
+      </div>
+    </aside>
+
+    <main>
+      <div class="verbar" id="verbar" hidden></div>
+      <div class="topbar">
+        <button class="btn btn-ic mobtop" id="btnMenu"><i class="bi bi-list"></i></button>
+        <h1 id="pgTitle">หน้าแรก</h1>
+        <div class="sp"></div>
+        <div id="topExtra" class="row"></div>
+      </div>
+      <div class="page" id="page"></div>
+      <div class="credit">
+        ระบบจัดการตารางเวร Part Time · ฝ่ายการพยาบาล<br>
+        พัฒนาโดยงานบริหารเงินเดือน ค่าจ้าง และค่าตอบแทน ฝ่ายทรัพยากรบุคคล · <span id="verTxt"></span>
+      </div>
+    </main>
+  </div>
+</div>
+
+<script src="config.js?v=2569-09-29.1"></script>
+<script src="javascript.js?v=2569-09-29.1"></script>
+<script src="components.js?v=2569-09-29.1"></script>
+<script src="help.js?v=2569-09-29.1"></script>
+<script src="pages.js?v=2569-09-29.1"></script>
+<script src="pages-admin.js?v=2569-09-29.1"></script>
+<script>boot();</script>
+</body>
+</html>
