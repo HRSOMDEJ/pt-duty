@@ -1,104 +1,209 @@
 <!DOCTYPE html>
-<html lang="th">
+<html lang="th" data-theme="light">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="pt-build" content="2569-09-29.1">
-<meta name="theme-color" content="#0d6e66">
-<title>ระบบจัดการตารางเวร Part Time</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="pt-build" content="2569-09-29.2">
+<meta name="theme-color" content="#0b6f7c">
+<title>ตารางเวร Part Time · รพ.สมเด็จพระบรมราชเทวี ณ ศรีราชา</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop offset='0' stop-color='%2314b8a6'/%3E%3Cstop offset='1' stop-color='%230b5f86'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='64' height='64' rx='18' fill='url(%23g)'/%3E%3Crect x='14' y='18' width='36' height='32' rx='7' fill='none' stroke='white' stroke-width='4'/%3E%3Cpath d='M14 28h36M24 12v10M40 12v10' stroke='white' stroke-width='4' stroke-linecap='round'/%3E%3Ccircle cx='32' cy='39' r='4.5' fill='%23ffd166'/%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Anuphan:wght@500;600;700&family=IBM+Plex+Sans+Thai:wght@400;500;600&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Anuphan:wght@400;500;600;700&family=IBM+Plex+Sans+Thai:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
 <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=2569-09-29.1">
+<link rel="stylesheet" href="style.css?v=2569-09-29.2">
+<script>
+  // ตั้งธีมก่อนวาดหน้า (กันหน้าจอกระพริบสีขาวในโหมดกลางคืน)
+  try { var t = localStorage.getItem('pt_theme') || ((window.matchMedia && matchMedia('(prefers-color-scheme: dark)').matches) ? 'dark' : 'light');
+        document.documentElement.setAttribute('data-theme', t); document.documentElement.setAttribute('data-bs-theme', t); } catch (e) {}
+</script>
 </head>
 <body>
+<div id="progress" aria-hidden="true"></div>
 
-<div id="progress"></div>
-<div class="toast" id="toast"></div>
+<!-- ============================================================ เข้าสู่ระบบ -->
+<div id="vLogin" class="lgn" hidden>
+  <div class="lg-bg" aria-hidden="true"><i class="b1"></i><i class="b2"></i><i class="b3"></i><div class="lg-grid"></div></div>
+  <div class="lg-wrap">
+    <div class="lg-card">
+      <section class="lg-art" aria-hidden="true">
+        <div class="lg-aurora"></div>
+        <div class="lg-brand">
+          <div class="lg-logo"><i class="bi bi-calendar2-heart"></i></div>
+          <div><b>ตารางเวร Part Time</b><span>รพ.สมเด็จพระบรมราชเทวี ณ ศรีราชา</span></div>
+        </div>
+        <div class="orbit">
+          <div class="orb-ring r1"></div><div class="orb-ring r2"></div><div class="orb-ring r3"></div>
+          <div class="orb-core"><i class="bi bi-hospital"></i><span>ทุกฝ่าย<br>ในที่เดียว</span></div>
+          <div class="orb-spin s1"><span class="orb-dot d-sun" title="เวรเช้า"><i class="bi bi-brightness-high-fill"></i></span></div>
+          <div class="orb-spin s2"><span class="orb-dot d-sunset" title="เวรบ่าย"><i class="bi bi-sunset-fill"></i></span></div>
+          <div class="orb-spin s3"><span class="orb-dot d-moon" title="เวรดึก"><i class="bi bi-moon-stars-fill"></i></span></div>
+        </div>
+        <div class="float-card fc1"><i class="bi bi-check2-circle"></i><div><b>ส่งตรวจแล้ว</b><small>IPD&amp;OPD · ก.ย.</small></div></div>
+        <div class="float-card fc2"><i class="bi bi-fingerprint"></i><div><b>สแกนครบ 8 ชม.</b><small>เวรเช้า 08:00–16:00</small></div></div>
+        <div class="lg-hero">
+          <div class="lg-kicker"><span class="dot"></span> Part Time Duty · v2</div>
+          <h1>จัดตารางเวรนอกเวลา<br><em>ครบทุกฝ่าย จบในระบบเดียว</em></h1>
+          <ul class="lg-feats">
+            <li style="--i:0"><i class="bi bi-diagram-3"></i><span>รองรับหลายฝ่าย — ฝ่ายการพยาบาล ฝ่ายเภสัชกรรม และฝ่ายอื่น ๆ</span></li>
+            <li style="--i:1"><i class="bi bi-shield-check"></i><span>คุมกรอบเวร ตรวจหน่วยต้นสังกัด และเวลาทับซ้อนให้อัตโนมัติ</span></li>
+            <li style="--i:2"><i class="bi bi-fingerprint"></i><span>เทียบเวลาสแกนนิ้วเข้า–ออก ให้ชั่วโมงครบตามเวร</span></li>
+            <li style="--i:3"><i class="bi bi-file-earmark-spreadsheet"></i><span>ออกเอกสารลงนาม และไฟล์ HRMi ได้ในคลิกเดียว</span></li>
+          </ul>
+        </div>
+        <div class="lg-clock"><b id="lgTime">--:--</b><span id="lgDate"></span></div>
+      </section>
 
-<!-- ============ เข้าสู่ระบบ ============ -->
-<div id="login" hidden>
-  <div class="lgcard">
-    <section class="lgart">
-      <div>
-        <div class="kicker">Part Time Duty · ฝ่ายการพยาบาล</div>
-        <h2>ระบบจัดการตารางเวร<br>Part Time</h2>
-      </div>
-      <ul>
-        <li><i class="bi bi-calendar2-week"></i><span>ลงตารางเวรทุกหน่วยงานในระบบเดียว ระบุหน่วยที่ไปปฏิบัติรายวัน</span></li>
-        <li><i class="bi bi-shield-check"></i><span>คุมกรอบเวรอัตโนมัติ และกันการลงเวรที่หน่วยต้นสังกัดของตนเอง</span></li>
-        <li><i class="bi bi-fingerprint"></i><span>ตรวจเวลาสแกนนิ้วเข้า–ออก ให้ชั่วโมงครบตามเวร</span></li>
-        <li><i class="bi bi-file-earmark-spreadsheet"></i><span>ออกเอกสารตารางเวร รายงานหน่วยปฏิบัติงาน และไฟล์ HRMi</span></li>
-      </ul>
-      <div class="clock"><b id="lgTime">--:--</b><span id="lgDate"></span></div>
-    </section>
-    <section class="lgform">
-      <h3>เข้าสู่ระบบ</h3>
-      <p class="s">ใช้รหัสพนักงานและรหัสผ่านของท่าน</p>
-      <div id="lgMsg"></div>
-      <form id="fLogin" autocomplete="on">
-        <div class="field">
-          <label class="fl" for="lgCode">รหัสพนักงาน</label>
-          <input id="lgCode" inputmode="numeric" autocomplete="username" required>
+      <section class="lg-form">
+        <form id="fLogin" autocomplete="on" novalidate>
+          <div class="lg-mlogo"><div class="lg-logo"><i class="bi bi-calendar2-heart"></i></div><div><b>ตารางเวร Part Time</b><small>รพ.สมเด็จพระบรมราชเทวี ณ ศรีราชา</small></div></div>
+          <h2 class="lg-title">ยินดีต้อนรับ <span class="wave">👋</span></h2>
+          <p class="lg-sub">เข้าสู่ระบบด้วยรหัสพนักงานและรหัสผ่านของท่าน</p>
+          <div id="lgMsg"></div>
+          <div class="fl">
+            <i class="bi bi-person-badge fl-ic"></i>
+            <input class="fl-in" id="lgCode" inputmode="numeric" autocomplete="username" placeholder=" " required>
+            <label for="lgCode">รหัสพนักงาน</label>
+          </div>
+          <div class="fl">
+            <i class="bi bi-shield-lock fl-ic"></i>
+            <input class="fl-in" id="lgPw" type="password" autocomplete="current-password" placeholder=" " required>
+            <label for="lgPw">รหัสผ่าน</label>
+            <button class="fl-eye" type="button" id="lgEye" aria-label="แสดงรหัสผ่าน" title="แสดง/ซ่อนรหัสผ่าน"><i class="bi bi-eye"></i></button>
+          </div>
+          <div class="lg-caps" id="lgCaps" hidden><i class="bi bi-capslock-fill"></i> เปิดแป้นพิมพ์ตัวพิมพ์ใหญ่ (Caps Lock) อยู่</div>
+          <div class="lg-row">
+            <label class="lg-remember"><input type="checkbox" id="lgRem"><span class="sw"></span> จำรหัสพนักงาน</label>
+            <a href="#" id="lgForgot">ลืมรหัสผ่าน?</a>
+          </div>
+          <button class="lg-btn" type="submit" id="lgBtn"><span>เข้าสู่ระบบ</span><i class="bi bi-arrow-right"></i></button>
+          <div class="lg-hint"><i class="bi bi-info-circle"></i> เข้าใช้ครั้งแรก: รหัสผ่านคือรหัสพนักงานของท่าน ระบบจะให้ตั้งรหัสใหม่ทันที</div>
+          <div class="conn" id="connState"><span class="wait"><i></i> กำลังตรวจการเชื่อมต่อระบบ…</span></div>
+        </form>
+        <div class="lg-wait" id="lgWait" hidden role="status" aria-live="polite">
+          <div class="lg-spin"><i></i><i></i><i></i></div>
+          <b id="lgWaitT">กำลังเข้าสู่ระบบ…</b>
+          <ol class="lg-steps" id="lgSteps">
+            <li data-s="1">ตรวจสอบรหัสพนักงานและรหัสผ่าน</li>
+            <li data-s="2">โหลดสิทธิ์ ฝ่าย และหน่วยงานของท่าน</li>
+            <li data-s="3">เตรียมหน้าแรก</li>
+          </ol>
+          <div class="lg-bar"><i id="lgBar"></i></div>
+          <small>กรุณารอสักครู่ ไม่ต้องกดซ้ำหรือปิดหน้านี้ (เซิร์ฟเวอร์ Google อาจใช้เวลา 5–15 วินาที)</small>
         </div>
-        <div class="field">
-          <label class="fl" for="lgPw">รหัสผ่าน</label>
-          <input id="lgPw" type="password" autocomplete="current-password" required>
-        </div>
-        <label class="chk" style="margin-bottom:.9rem"><input type="checkbox" id="lgRem"> จำรหัสพนักงานไว้</label>
-        <button class="btn btn-pri btn-lg" style="width:100%" id="lgBtn" type="submit">เข้าสู่ระบบ</button>
+      </section>
+    </div>
+    <footer class="login-foot" id="lgFoot">พัฒนาโดยงานบริหารเงินเดือน ค่าจ้าง และค่าตอบแทน ฝ่ายทรัพยากรบุคคล · <span id="lgVer">เวอร์ชัน 2.2569</span></footer>
+  </div>
+</div>
+
+<!-- ============================================================ ตั้งรหัสผ่านครั้งแรก -->
+<div id="vForce" class="lgn lg-single" hidden>
+  <div class="lg-bg" aria-hidden="true"><i class="b1"></i><i class="b2"></i><i class="b3"></i><div class="lg-grid"></div></div>
+  <div class="lg-wrap">
+    <div class="lg-card lg-card-s">
+      <div class="lg-mlogo show"><div class="lg-logo"><i class="bi bi-shield-lock"></i></div><div><b>ตั้งค่าบัญชีก่อนเริ่มใช้งาน</b><small id="fcWho"></small></div></div>
+      <div class="fc-steps"><span class="on" id="fcS1"><i>1</i> รหัสผ่านใหม่</span><span id="fcS2"><i>2</i> เบอร์โทรติดต่อ</span></div>
+      <form id="fPw" autocomplete="off">
+        <p class="lg-sub mb-3">เพื่อความปลอดภัย กรุณาตั้งรหัสผ่านใหม่ <b>อย่างน้อย 8 ตัว</b> มีทั้งตัวอักษรภาษาอังกฤษและตัวเลข</p>
+        <div class="fl"><i class="bi bi-key fl-ic"></i><input class="fl-in" id="fcOld" type="password" placeholder=" " autocomplete="current-password"><label for="fcOld">รหัสผ่านปัจจุบัน (ครั้งแรก = รหัสพนักงาน)</label></div>
+        <div class="fl"><i class="bi bi-shield-lock fl-ic"></i><input class="fl-in" id="fcNew" type="password" placeholder=" " autocomplete="new-password"><label for="fcNew">รหัสผ่านใหม่</label></div>
+        <div class="pw-meter"><i id="pwMeter"></i></div><div class="pw-hint" id="pwHint">ความแข็งแรงของรหัสผ่าน</div>
+        <div class="fl"><i class="bi bi-shield-check fl-ic"></i><input class="fl-in" id="fcNew2" type="password" placeholder=" " autocomplete="new-password"><label for="fcNew2">ยืนยันรหัสผ่านใหม่</label></div>
+        <button class="lg-btn" type="submit"><span>ถัดไป</span><i class="bi bi-arrow-right"></i></button>
       </form>
-      <p class="s" style="margin-top:1rem">เข้าใช้ครั้งแรก: รหัสผ่านคือรหัสพนักงานของท่าน ระบบจะให้ตั้งรหัสใหม่ทันที<br>
-        ลืมรหัสผ่าน กรุณาติดต่อ<span id="lgOwner"> งานบริหารเงินเดือนฯ ฝ่ายทรัพยากรบุคคล</span></p>
-      <div class="credit" id="lgVer" style="padding-bottom:0"></div>
-    </section>
+      <form id="fPhone" hidden autocomplete="off">
+        <p class="lg-sub mb-3">หมายเลขโทรศัพท์ใช้สำหรับติดต่อประสานงานเรื่องตารางเวรเท่านั้น</p>
+        <div class="fl"><i class="bi bi-telephone fl-ic"></i><input class="fl-in" id="fcPhone" inputmode="tel" placeholder=" " maxlength="12"><label for="fcPhone">เบอร์โทรศัพท์มือถือ</label></div>
+        <button class="lg-btn" type="submit"><span>บันทึกและเริ่มใช้งาน</span><i class="bi bi-rocket-takeoff"></i></button>
+      </form>
+      <button class="btn btn-link text-secondary mt-3 p-0" type="button" id="fcOut"><i class="bi bi-box-arrow-left"></i> ออกจากระบบ</button>
+    </div>
   </div>
 </div>
 
-<!-- ============ ตัวระบบ ============ -->
-<div id="app">
-  <div class="shell">
-    <aside class="side" id="side">
-      <div class="side-top">
-        <div class="logo">PT</div>
-        <div><b>ตารางเวร PT</b><span>ฝ่ายการพยาบาล</span></div>
+<!-- ============================================================ ตัวระบบ -->
+<div id="vApp" class="shell" hidden>
+  <aside class="side" id="side">
+    <div class="side-brand">
+      <div class="logo"><i class="bi bi-calendar2-heart"></i></div>
+      <div class="side-txt"><b>ตารางเวร PT</b><small>ทุกฝ่าย · รพ.สมเด็จฯ</small></div>
+    </div>
+    <nav class="side-nav" id="nav"></nav>
+    <div class="side-user">
+      <div class="avatar" id="meAv">?</div>
+      <div class="side-txt flex-grow-1" style="min-width:0"><div class="fw-semibold text-truncate" id="meName">—</div><div class="side-role text-truncate" id="meRole"></div></div>
+      <div class="dropdown side-txt">
+        <button class="btn btn-icon btn-side" data-bs-toggle="dropdown" aria-label="บัญชีผู้ใช้"><i class="bi bi-three-dots-vertical"></i></button>
+        <ul class="dropdown-menu dropdown-menu-end shadow">
+          <li><a class="dropdown-item" href="#" data-act="account"><i class="bi bi-person-gear me-2"></i>บัญชีของฉัน</a></li>
+          <li><a class="dropdown-item" href="#" data-act="password"><i class="bi bi-key me-2"></i>เปลี่ยนรหัสผ่าน</a></li>
+          <li><a class="dropdown-item" href="#" data-act="theme"><i class="bi bi-circle-half me-2"></i>สลับโหมดกลางวัน/กลางคืน</a></li>
+          <li><hr class="dropdown-divider"></li>
+          <li><a class="dropdown-item text-danger" href="#" data-act="logout"><i class="bi bi-box-arrow-right me-2"></i>ออกจากระบบ</a></li>
+        </ul>
       </div>
-      <nav class="menu" id="menu"></nav>
-      <div class="side-foot">
-        <b id="meName">—</b>
-        <span id="meRole"></span>
-        <div style="margin-top:.5rem;display:flex;gap:.35rem">
-          <button class="btn btn-sm" id="btnTheme" title="สลับโหมดกลางวัน/กลางคืน"><i class="bi bi-moon-stars"></i></button>
-          <button class="btn btn-sm" id="btnPw" title="เปลี่ยนรหัสผ่าน"><i class="bi bi-key"></i></button>
-          <button class="btn btn-sm" id="btnOut" title="ออกจากระบบ"><i class="bi bi-box-arrow-right"></i></button>
-        </div>
-      </div>
-    </aside>
+    </div>
+  </aside>
 
-    <main>
-      <div class="verbar" id="verbar" hidden></div>
-      <div class="topbar">
-        <button class="btn btn-ic mobtop" id="btnMenu"><i class="bi bi-list"></i></button>
-        <h1 id="pgTitle">หน้าแรก</h1>
-        <div class="sp"></div>
-        <div id="topExtra" class="row"></div>
+  <div class="main">
+    <header class="topbar">
+      <button class="btn btn-icon btn-ghost d-lg-none" type="button" data-bs-toggle="offcanvas" data-bs-target="#ocNav" aria-label="เปิดเมนู"><i class="bi bi-list"></i></button>
+      <button class="btn btn-icon btn-ghost d-none d-lg-inline-flex" type="button" id="sideBtn" aria-label="ย่อ/ขยายเมนู" title="ย่อ/ขยายเมนู"><i class="bi bi-layout-sidebar-inset"></i></button>
+      <div class="top-title"><small id="topCrumb">ตารางเวร PT</small><b id="topTitle">หน้าแรก</b></div>
+      <div id="topExtra" class="top-extra"></div>
+      <div class="d-flex gap-2 align-items-center top-tools">
+        <button class="btn btn-soft btn-sm top-help" type="button" id="btnHelp" title="คำชี้แจงการใช้งานหน้านี้"><i class="bi bi-lightbulb"></i><span class="d-none d-md-inline">คำชี้แจง</span></button>
+        <button class="btn btn-icon btn-ghost" type="button" id="btnTheme" title="สลับโหมดกลางวัน/กลางคืน"><i class="bi bi-moon-stars"></i></button>
       </div>
-      <div class="page" id="page"></div>
-      <div class="credit">
-        ระบบจัดการตารางเวร Part Time · ฝ่ายการพยาบาล<br>
-        พัฒนาโดยงานบริหารเงินเดือน ค่าจ้าง และค่าตอบแทน ฝ่ายทรัพยากรบุคคล · <span id="verTxt"></span>
-      </div>
-    </main>
+    </header>
+    <div id="annApp"></div>
+    <main class="content" id="view"></main>
+    <footer class="app-foot">ระบบจัดการตารางเวร Part Time · รพ.สมเด็จพระบรมราชเทวี ณ ศรีราชา สภากาชาดไทย<br>
+      พัฒนาโดยงานบริหารเงินเดือน ค่าจ้าง และค่าตอบแทน ฝ่ายทรัพยากรบุคคล · <span id="verTxt"></span></footer>
+  </div>
+
+  <div class="offcanvas offcanvas-start oc-nav" tabindex="-1" id="ocNav" style="width:290px">
+    <div class="side-brand"><div class="logo"><i class="bi bi-calendar2-heart"></i></div><div><b>ตารางเวร PT</b><small>ทุกฝ่าย · รพ.สมเด็จฯ</small></div>
+      <button type="button" class="btn-close btn-close-white ms-auto" data-bs-dismiss="offcanvas" aria-label="ปิด"></button></div>
+    <div class="offcanvas-body pt-0"><nav id="nav2" class="side-nav"></nav>
+      <div class="nav-g">บัญชีของฉัน</div>
+      <a class="nav-i" href="#" data-act="account"><i class="bi bi-person-gear"></i><span>บัญชีของฉัน</span></a>
+      <a class="nav-i" href="#" data-act="password"><i class="bi bi-key"></i><span>เปลี่ยนรหัสผ่าน</span></a>
+      <a class="nav-i" href="#" data-act="logout"><i class="bi bi-box-arrow-right"></i><span>ออกจากระบบ</span></a></div>
+  </div>
+
+  <div class="offcanvas offcanvas-end oc-help" tabindex="-1" id="ocHelp">
+    <div class="offcanvas-header">
+      <div><div class="small-muted"><i class="bi bi-lightbulb"></i> คำชี้แจงการใช้งาน</div><h5 class="offcanvas-title fw-bold" id="helpTitle"></h5></div>
+      <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="ปิด"></button>
+    </div>
+    <div class="offcanvas-body" id="helpBody"></div>
   </div>
 </div>
 
-<script src="config.js?v=2569-09-29.1"></script>
-<script src="javascript.js?v=2569-09-29.1"></script>
-<script src="components.js?v=2569-09-29.1"></script>
-<script src="help.js?v=2569-09-29.1"></script>
-<script src="pages.js?v=2569-09-29.1"></script>
-<script src="pages-admin.js?v=2569-09-29.1"></script>
+<!-- หน้าต่างทั่วไป -->
+<div class="modal fade" id="mdl" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable" id="mdlDlg">
+    <div class="modal-content">
+      <div class="modal-header"><div class="mdl-ic" id="mdlIc"><i class="bi bi-pencil-square"></i></div><div class="flex-grow-1"><h5 class="modal-title fw-bold" id="mdlTitle"></h5><div class="small-muted" id="mdlSub"></div></div>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="ปิด" id="mdlX"></button></div>
+      <div class="modal-body" id="mdlBody"></div>
+      <div class="modal-footer" id="mdlFoot"></div>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11.14.5/dist/sweetalert2.all.min.js"></script>
+<script src="config.js?v=2569-09-29.2"></script>
+<script src="javascript.js?v=2569-09-29.2"></script>
+<script src="components.js?v=2569-09-29.2"></script>
+<script src="help.js?v=2569-09-29.2"></script>
+<script src="pages.js?v=2569-09-29.2"></script>
+<script src="pages-admin.js?v=2569-09-29.2"></script>
+<script src="pages-users.js?v=2569-09-29.2"></script>
 <script>boot();</script>
 </body>
 </html>
