@@ -178,7 +178,7 @@ function admTab(t) {
         '<div class="row g-2"><div class="col-6">' + f('signer1Name', 'ชื่อผู้ลงนามที่ 1') + '</div><div class="col-6">' + f('signer1Pos', 'ตำแหน่งที่ 1') + '</div>' +
         '<div class="col-6">' + f('signer2Name', 'ชื่อผู้ลงนามที่ 2') + '</div><div class="col-6">' + f('signer2Pos', 'ตำแหน่งที่ 2') + '</div>' +
         '<div class="col-6">' + f('signer3Name', 'ชื่อผู้ลงนามที่ 3') + '</div><div class="col-6">' + f('signer3Pos', 'ตำแหน่งที่ 3') + '</div></div>') +
-      admCard('bi-three-dots', 'อื่น ๆ', '', '', f('rateNote', 'ข้อความเตือนบนหน้าอัตรา') + f('notifyEmail', 'อีเมลรับการแจ้งเตือนเส้นตาย') + f('reportPrefix', 'คำนำหน้าเลขที่รายงาน') +
+      admCard('bi-three-dots', 'อื่น ๆ', '', '', f('rateNote', 'ข้อความเตือนบนหน้าอัตรา') + f('notifyEmail', 'อีเมลรับการแจ้งเตือนเส้นตาย') + f('reportPrefix', 'คำนำหน้าเลขที่รายงาน') + f('hrmiPrefix', 'คำนำหน้าชื่อไฟล์ HRMi (เช่น PT → PT_R631-6.xlsx · เว้นว่าง = รหัสรายได้อย่างเดียว)') +
         '<div class="small-muted">บุคลากร ' + num(d.counts.employees) + ' · บัญชี ' + num(d.counts.users) + ' · เวร ' + num(d.counts.duties) + ' · สแกน ' + num(d.counts.scans) + ' แถว</div>') +
       '</div>' + (admin ? '<div class="mt-3"><button class="btn btn-brand btn-lg" id="optSave"><i class="bi bi-save"></i> บันทึกค่าตั้งค่า</button></div>' : noteBox('info', 'bi-lock', 'ค่าตั้งค่าระบบแก้ได้โดยผู้ดูแลระบบ', 'mt-3'));
     if ($('optSave')) $('optSave').addEventListener('click', function () {

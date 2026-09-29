@@ -6,7 +6,7 @@
  *  · ล็อกอินรอบเดียว (withBoot) — ลดเวลารอคิวของ Google
  *  · v2: ทุกปุ่มที่บันทึก/ส่ง/สร้าง ใช้ act() — ขึ้นป๊อปอัปบอกว่ากำลังทำอะไร ใช้เวลากี่วินาที และผลเป็นอย่างไร
  */
-var PT_BUILD = '2569-09-29.3';
+var PT_BUILD = '2569-09-29.4';
 var PT_VER = '2.2569';
 var S = { token: null, me: null, boot: null, page: 'home', ym: '', unitId: '', deptId: '' };
 var NET = { active: 0, queue: [], MAX: 4 };
@@ -14,7 +14,7 @@ var NET = { active: 0, queue: [], MAX: 4 };
 /* ---------------------------------------------------------------- เครือข่าย */
 function netSlot() { return new Promise(function (r) { if (NET.active < NET.MAX) { NET.active++; r(); } else NET.queue.push(r); }); }
 function netDone() { var n = NET.queue.shift(); if (n) n(); else NET.active = Math.max(0, NET.active - 1); }
-function isRead(a) { return /^(get|list|bootstrap|branding|ping|suggest|login|search|lookup)/.test(a); }
+function isRead(a) { return /^(get|list|bootstrap|branding|ping|suggest|login|search|lookup|preload|preview|printDoc|hrmiData|excelData)/.test(a); }
 
 function fetchOnce(action, payload) {
   return fetch(API_URL, {
@@ -62,12 +62,24 @@ function cacheClear() {
 function api(action, payload, opt) {
   opt = opt || {};
   var k = mkey(action, payload);
+  // v2.4: ข้อมูลที่โหลดไว้แล้ว (ตอนเข้าระบบ) ใช้ได้ทันทีไม่ต้องถามเซิร์ฟเวอร์ · กำลังโหลดอยู่ = รอชุดเดียวกัน ไม่ยิงซ้ำ
+  if (opt.fresh && !opt.force) {
+    if (MEMO[k] && Date.now() - MEMO_T[k] < MEMO_TTL) return Promise.resolve(MEMO[k]);
+    if (PRE.wait[k]) {
+      if (opt.onCache) { var cd0 = pcGet(k); if (cd0) { try { opt.onCache(cd0); } catch (e) { } } }
+      return PRE.wait[k].then(function () {
+        if (MEMO[k]) return MEMO[k];
+        var o2 = {}; for (var x in opt) o2[x] = opt[x]; o2.force = true; o2.onCache = null;
+        return api(action, payload, o2);
+      });
+    }
+  }
   if (opt.fresh && opt.onCache) {
     var cd = MEMO[k] || pcGet(k);
     if (cd) { try { opt.onCache(cd); } catch (e) { } opt._cached = JSON.stringify(cd); }
     if (MEMO[k] && Date.now() - MEMO_T[k] < 15000) return Promise.resolve(MEMO[k]);
   }
-  if (!isRead(action)) cacheClear();
+  if (!isRead(action)) { cacheClear(); if (S.me && action !== 'logout' && action !== 'changePassword') schedulePreload(); }
   bar(0.25);
   var slow = setTimeout(function () { bar(0.7); }, 1500);
   return rawCall(action, payload).then(function (res) {
@@ -276,7 +288,7 @@ function showView(v) {
   $('vApp').hidden = v !== 'app';
 }
 function signedOut(expired) {
-  S.token = null; S.me = null; cacheClear();
+  S.token = null; S.me = null; cacheClear(); PRE.run++; PRE.wait = {};
   try { localStorage.removeItem('pt_token'); } catch (e) { }
   if (window.Swal) Swal.close();
   $('lgWait').hidden = true; $('fLogin').hidden = false;
@@ -307,6 +319,7 @@ function enterApp() {
   $('meAv').textContent = initials(me.name);
   $('verTxt').textContent = 'เวอร์ชัน ' + b.app.version + ' build ' + b.app.build + ' (' + b.app.buildTh + ')';
   $('annApp').innerHTML = '';
+  startPreload(S.ym || b.ym);   // v2.4: โหลดข้อมูลทุกหน้าครั้งเดียว (หน้าแรกแสดงได้ทันทีจากข้อมูลตอนเข้าสู่ระบบ)
   if (b.app.build !== PT_BUILD) {
     $('annApp').innerHTML = '<div class="ver-bar"><i class="bi bi-exclamation-triangle"></i> หน้าเว็บเป็น build ' + h(PT_BUILD) + ' แต่ระบบหลังบ้านเป็น build ' + h(b.app.build) +
       ' — กรุณาแจ้งผู้ดูแลระบบให้ Deploy หลังบ้านเวอร์ชันใหม่ (Manage deployments › Edit › New version)</div>';

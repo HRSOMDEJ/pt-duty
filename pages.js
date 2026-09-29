@@ -5,7 +5,7 @@ var PAGES = window.PAGES || {};
 window.PAGES = PAGES;
 var DOW = ['อา.', 'จ.', 'อ.', 'พ.', 'พฤ.', 'ศ.', 'ส.'];
 function todayStr() { var d = new Date(); return d.getFullYear() + '-' + ('0' + (d.getMonth() + 1)).slice(-2) + '-' + ('0' + d.getDate()).slice(-2); }
-function wireYm(id, page) { $(id).addEventListener('change', function () { S.ym = this.value; PAGES[page](); }); }
+function wireYm(id, page) { $(id).addEventListener('change', function () { S.ym = this.value; startPreload(S.ym, true); PAGES[page](); }); }
 function isManager() { return S.me.canEditUnits === null || (S.me.canEditUnits || []).length > 0 || S.me.isChief; }
 
 /* ================================================================ หน้าแรก */
@@ -502,8 +502,8 @@ function addPerson() {
     onOpen: function (root, close) {
       var q = root.querySelector('#apQ'), box = root.querySelector('#apList'), t = null;
       var search = function () {
-        box.innerHTML = '<div class="skeleton" style="height:56px"></div><div class="skeleton" style="height:56px"></div>';
-        api('searchEmployees', { q: q.value }).then(function (list) {
+        if (!EMPS) box.innerHTML = '<div class="small-muted mb-2"><span class="spin"></span> กำลังโหลดรายชื่อ (ครั้งเดียว)…</div><div class="skeleton" style="height:56px"></div>';
+        empLite().then(function (all) { EMPS = all; return empSearchLocal(all, q.value, 40); }).then(function (list) {
           box.innerHTML = list.length ? list.map(function (e, i) {
             var inGrid = d.people.some(function (p) { return p.empCode === e.empCode; });
             var pids = d.unit.posIds || [], posOk = !pids.length || pids.indexOf(e.posId) >= 0;
@@ -531,7 +531,8 @@ function addPerson() {
           });
         }).catch(errToast);
       };
-      q.addEventListener('input', function () { clearTimeout(t); t = setTimeout(search, 300); });
+      var EMPS = null;
+      q.addEventListener('input', function () { clearTimeout(t); t = setTimeout(search, EMPS ? 60 : 250); });
       search();
     }
   });
@@ -643,7 +644,7 @@ function attachFor(empCode, date, ym, self) {
     onOpen: function (root) {
       api('listAttachments', { ym: ym, empCode: empCode, date: date }).then(function (list) {
         root.querySelector('#atList').innerHTML = list.length ? list.map(function (a) {
-          return '<div class="d-flex align-items-center gap-2 mb-1"><i class="bi bi-file-earmark-check text-brand"></i><a href="' + h(a.url) + '" target="_blank" rel="noopener">' + h(a.fileName) + '</a>' +
+          return '<div class="d-flex align-items-center gap-2 mb-1"><i class="bi bi-file-earmark-check text-brand"></i><a href="#" onclick="openAttach(\'' + h(a.id) + '\');return false">' + h(a.fileName) + '</a>' +
             '<button class="btn btn-sm btn-danger-soft ms-auto" onclick="delAttach(\'' + a.id + '\')"><i class="bi bi-trash"></i></button></div>';
         }).join('') : 'ยังไม่มีไฟล์แนบ';
       }).catch(function () { });
@@ -788,40 +789,49 @@ PAGES.docs = function () {
   var canHr = S.me.isAdmin || (S.me.roles || []).indexOf('CHIEF') >= 0;
   var html = pageHead('bi-file-earmark-arrow-down', 'เอกสารและไฟล์ HRMi · ' + thaiYmJs(ym, true), GUIDE.docs.lead) + '<div class="grid-auto anim" style="--min:320px">';
   html += '<div class="card-x hov"><div class="card-h"><h3><i class="bi bi-file-earmark-pdf"></i> ตารางเวร + รายงานหน่วยปฏิบัติงาน</h3></div>' +
-    '<p class="small-muted">PDF 2 แผ่น: แผ่นที่ 1 ตารางเวรรายวันพร้อมช่องลงนาม 3 จุด · แผ่นที่ 2 รายงานหน่วยปฏิบัติงาน</p>' +
+    '<p class="small-muted">เปิดหน้าพิมพ์ 2 แผ่น (A4 แนวนอน): แผ่นที่ 1 ตารางเวรรายวันพร้อมช่องลงนาม 3 จุด · แผ่นที่ 2 รายงานหน่วยปฏิบัติงาน — เลือก “บันทึกเป็น PDF” ได้จากหน้าพิมพ์</p>' +
     '<label class="form-label">หน่วยงาน</label><select class="form-select mb-3" id="pdUnit">' + unitOptions(pickUnit(units), units) + '</select>' +
-    '<button class="btn btn-brand w-100" id="pdGo"><i class="bi bi-file-earmark-pdf"></i> สร้างเอกสาร PDF</button><div id="pdOut"></div></div>';
+    '<button class="btn btn-brand w-100" id="pdGo"><i class="bi bi-printer"></i> พิมพ์ตารางเวร</button><div id="pdOut"></div></div>';
   html += '<div class="card-x hov"><div class="card-h"><h3><i class="bi bi-table"></i> สรุปค่าตอบแทน / Excel</h3></div>' +
-    '<p class="small-muted">รายชื่อ จำนวนเวรแยกช่วง รหัสรายได้ จำนวนเงิน พร้อมช่องลงนาม · Excel มีทุกแถวพร้อมเวลาสแกนและข้อสังเกต</p>' +
+    '<p class="small-muted">พิมพ์สรุป: รายชื่อ จำนวนเวรแยกช่วง รหัสรายได้ จำนวนเงิน พร้อมช่องลงนาม · Excel: ดาวน์โหลดทันที ทุกแถวพร้อมเวลาสแกนและข้อสังเกต</p>' +
     '<label class="form-label">หน่วยงาน</label><select class="form-select mb-3" id="smUnit">' + unitOptions('', units, 'ทุกหน่วยงานที่ท่านดูแล') + '</select>' +
-    '<div class="d-flex gap-2"><button class="btn btn-brand flex-grow-1" id="smGo"><i class="bi bi-file-earmark-pdf"></i> PDF สรุป</button><button class="btn btn-ghost flex-grow-1" id="xlGo"><i class="bi bi-file-earmark-excel"></i> Excel รายละเอียด</button></div><div id="smOut"></div></div>';
+    '<div class="d-flex gap-2"><button class="btn btn-brand flex-grow-1" id="smGo"><i class="bi bi-printer"></i> พิมพ์สรุป</button><button class="btn btn-ghost flex-grow-1" id="xlGo"><i class="bi bi-file-earmark-excel"></i> Excel รายละเอียด</button></div><div id="smOut"></div></div>';
   if (canHr) {
     html += '<div class="card-x hov" style="grid-column:1/-1"><div class="card-h"><h3><i class="bi bi-filetype-xlsx"></i> ไฟล์นำเข้า HRMi</h3><span class="sub">เลือกฝ่าย · หน่วยงาน · รหัสรายได้ · บุคลากร แล้วดูตัวเลขก่อนสร้างไฟล์</span></div>' +
-      '<p class="small-muted">คอลัมน์: รหัสพนักงาน · เลขบัตร (0) · รหัสรายได้ · จำนวน · 0 · 0 · 0 — ไฟล์จริงออกได้เฉพาะหน่วยงานที่ปิดรอบแล้ว</p>' +
+      '<p class="small-muted">หัวตาราง: รหัสพนักงาน · เลขบัตรประชาชน (0) · รหัสรายได้-รายหัก · จำนวน · รายได้ (บาท) · รายหัก (บาท) · รหัสงาน — 1 รหัสรายได้ = 1 ไฟล์ · เลือกหลายรหัสได้เป็น ZIP · ไฟล์จริงออกได้เฉพาะหน่วยงานที่ปิดรอบแล้ว</p>' +
       '<div class="row g-2 mb-2"><div class="col-md-4"><label class="form-label">1 · ฝ่าย</label><select class="form-select" id="hrDept">' + deptOptions(hrDepts.length === 1 ? hrDepts[0].deptId : '', hrDepts.length > 1 ? 'ทุกฝ่ายที่ดูแล' : '', hrDepts.map(function (x) { return x.deptId; })) + '</select></div>' +
-      '<div class="col-md-4"><label class="form-label">รูปแบบไฟล์</label><select class="form-select" id="hrMode"><option value="split">แยกไฟล์ตามรหัสรายได้</option><option value="single">รวมไฟล์เดียว</option></select></div>' +
+      '<div class="col-md-4"><label class="form-label">รูปแบบไฟล์</label><select class="form-select" id="hrMode"><option value="split">แยกไฟล์ตามรหัสรายได้ (หลายรหัส = ZIP)</option><option value="single">รวมทุกรหัสในไฟล์เดียว</option></select></div>' +
       '<div class="col-md-4"><label class="form-label">เฉพาะบุคลากร (ถ้าต้องการ)</label><input class="form-control" id="hrEmp" placeholder="เว้นว่าง = ทุกคน · ใส่รหัสพนักงาน คั่นด้วย ,"></div></div>' +
       '<div id="hrPick"><div class="skeleton" style="height:5em"></div></div>' +
       '<div class="d-flex flex-wrap gap-3 align-items-center mt-3"><div class="form-check form-switch m-0"><input class="form-check-input" type="checkbox" id="hrForce"><label class="form-check-label" for="hrForce">ออกไฟล์ทดลอง (ยังไม่ปิดรอบ — ใช้ตรวจตัวเลขก่อน)</label></div>' +
-      '<button class="btn btn-brand ms-auto" id="hrGo" style="min-width:220px"><i class="bi bi-filetype-xlsx"></i> สร้างไฟล์ HRMi</button></div><div id="hrOut"></div></div>';
+      '<button class="btn btn-brand ms-auto" id="hrGo" style="min-width:220px"><i class="bi bi-download"></i> ดาวน์โหลดไฟล์ HRMi</button></div><div id="hrOut"></div></div>';
   }
   html += '<div class="card-x"><div class="card-h"><h3><i class="bi bi-clock-history"></i> เอกสารที่เคยออกเดือนนี้</h3></div><div id="exList"><div class="skeleton" style="height:3em"></div></div></div></div>';
   $('view').innerHTML = html;
 
-  var run = function (btnId, outId, o) {
+  // v2.4: เอกสารพิมพ์ = ป๊อปอัปพิมพ์ · Excel/HRMi = สร้างไฟล์ในเครื่องแล้วดาวน์โหลดทันที (ไม่ผ่าน Google Drive)
+  var printIt = function (btnId, o) {
     $(btnId).addEventListener('click', function () {
       var p = o.payload();
-      act({ action: o.action, payload: p, title: o.title, text: o.text(p), icon: o.icon, steps: o.steps || ['รวบรวมข้อมูลและคำนวณ', 'สร้างเอกสารชั่วคราวใน Google Sheet', 'แปลงเป็นไฟล์และเก็บใน Google Drive'],
-        done: function () { return { title: 'สร้างเอกสารเรียบร้อย', html: 'ดาวน์โหลดได้ใต้ปุ่มที่กด หรือในรายการ “เอกสารที่เคยออก”', timer: 1800 }; } })
-        .then(function (r) { $(outId).innerHTML = o.render(r); loadEx(); }).catch(function () { });
+      act({ action: 'printDoc', payload: p, title: o.title, text: o.text(p), icon: 'bi-printer', steps: ['รวบรวมข้อมูลและคำนวณ', 'จัดหน้าเอกสาร A4'], done: false })
+        .then(function (r) { printPopup(r); loadEx(); }).catch(function () { });
     });
   };
-  run('pdGo', 'pdOut', { action: 'exportSchedulePdf', title: 'กำลังสร้าง PDF ตารางเวร', icon: 'bi-file-earmark-pdf', payload: function () { return { ym: S.ym || ym, unitId: $('pdUnit').value }; },
-    text: function (p) { return h(unitName(p.unitId)) + ' · ' + thaiYmJs(p.ym); }, render: function (r) { return downloadLinks([r]); } });
-  run('smGo', 'smOut', { action: 'exportSummaryPdf', title: 'กำลังสร้าง PDF สรุปค่าตอบแทน', icon: 'bi-file-earmark-pdf', payload: function () { return { ym: S.ym || ym, unitId: $('smUnit').value }; },
-    text: function (p) { return h(p.unitId ? unitName(p.unitId) : 'ทุกหน่วยงานที่ดูแล'); }, render: function (r) { return downloadLinks([r]); } });
-  run('xlGo', 'smOut', { action: 'exportExcel', title: 'กำลังสร้างไฟล์ Excel', icon: 'bi-file-earmark-excel', payload: function () { return { ym: S.ym || ym, unitId: $('smUnit').value }; },
-    text: function (p) { return h(p.unitId ? unitName(p.unitId) : 'ทุกหน่วยงานที่ดูแล'); }, render: function (r) { return downloadLinks([r]); } });
+  printIt('pdGo', { title: 'กำลังเตรียมเอกสารตารางเวร', payload: function () { return { ym: S.ym || ym, unitId: $('pdUnit').value, kind: 'schedule' }; },
+    text: function (p) { return h(unitName(p.unitId)) + ' · ' + thaiYmJs(p.ym); } });
+  printIt('smGo', { title: 'กำลังเตรียมเอกสารสรุปค่าตอบแทน', payload: function () { return { ym: S.ym || ym, unitId: $('smUnit').value, kind: 'summary' }; },
+    text: function (p) { return h(p.unitId ? unitName(p.unitId) : 'ทุกหน่วยงานที่ดูแล'); } });
+  $('xlGo').addEventListener('click', function () {
+    var p = { ym: S.ym || ym, unitId: $('smUnit').value };
+    act({ action: 'excelData', payload: p, title: 'กำลังสร้างไฟล์ Excel', text: h(p.unitId ? unitName(p.unitId) : 'ทุกหน่วยงานที่ดูแล'), icon: 'bi-file-earmark-excel',
+      steps: ['รวบรวมข้อมูลทุกเวร', 'สร้างไฟล์ .xlsx ในเครื่องของท่าน'], done: false })
+      .then(function (r) {
+        return downloadExcel(r).then(function (name) {
+          notify('ดาวน์โหลด ' + name + ' แล้ว', 'success');
+          $('smOut').innerHTML = noteBox('ok', 'bi-check-circle', 'ดาวน์โหลดแล้ว: <b>' + h(name) + '</b> (ดูในโฟลเดอร์ดาวน์โหลดของเครื่อง)', 'mt-3'); loadEx();
+        }, errToast);
+      }).catch(function () { });
+  });
   if (canHr) {
     var HR = { units: null, codes: null };
     var hrEmps = function () { return ($('hrEmp').value.match(/\d{3,10}/g) || []); };
@@ -872,22 +882,26 @@ PAGES.docs = function () {
       var codes = $$('#hrPick [data-code]').filter(function (x) { return x.checked; }).map(function (x) { return x.dataset.code; });
       if (HR.codes && !codes.length) { alertBox('ยังไม่ได้เลือกรหัสรายได้', 'เลือกอย่างน้อย 1 รหัส', 'info'); return; }
       var p = { ym: S.ym || ym, deptId: $('hrDept').value, unitIds: HR.units || [], codes: codes.length === (HR.codes || []).length ? [] : codes, empCodes: hrEmps(), mode: $('hrMode').value, force: $('hrForce').checked };
-      act({ action: 'exportHrmi', payload: p, title: 'กำลังสร้างไฟล์ HRMi', text: (p.deptId ? h(deptName(p.deptId)) : 'ทุกฝ่ายที่ดูแล') + ' · ' + codes.length + ' รหัส' + (p.force ? ' · ไฟล์ทดลอง' : ''), icon: 'bi-filetype-xlsx',
-        steps: ['ตรวจสถานะปิดรอบของหน่วยงานที่เลือก', 'รวมจำนวนตามรหัสรายได้ × บุคคล', 'สร้างไฟล์และเก็บใน Google Drive'],
-        done: function () { return { title: 'สร้างไฟล์ HRMi เรียบร้อย', html: 'ดาวน์โหลดได้ใต้ปุ่ม หรือในรายการ “เอกสารที่เคยออก”', timer: 1800 }; } })
+      act({ action: 'hrmiData', payload: p, title: 'กำลังสร้างไฟล์ HRMi', text: (p.deptId ? h(deptName(p.deptId)) : 'ทุกฝ่ายที่ดูแล') + ' · ' + codes.length + ' รหัส' + (p.force ? ' · ไฟล์ทดลอง' : ''), icon: 'bi-filetype-xlsx',
+        steps: ['ตรวจสถานะปิดรอบของหน่วยงานที่เลือก', 'รวมจำนวนตามรหัสรายได้ × บุคคล', 'สร้างไฟล์ .xlsx ในเครื่องของท่าน'], done: false })
         .then(function (r) {
-          $('hrOut').innerHTML = (r.test ? noteBox('warn', 'bi-exclamation-triangle', 'ไฟล์ทดลอง — ยังมีหน่วยงานที่ยังไม่ปิดรอบ ห้ามนำเข้า HRMi จริง', 'mt-3') : '') +
-            '<div class="mt-3">' + tableBox(['รหัสรายได้', 'ชื่อ', { t: 'คน', n: 1 }, { t: 'จำนวน', n: 1 }], r.preview.map(function (x) { return ['<span class="tag t-clo">' + h(x.code) + '</span>', h(x.name), num(x.people), num(x.qty) + ' ' + h(x.unit)]; })) + '</div>' +
-            downloadLinks(r.files) + '<div class="small-muted mt-2">ทั้งหมดอยู่ใน <a href="' + h(r.folderUrl) + '" target="_blank" rel="noopener">โฟลเดอร์ Google Drive</a></div>';
-          loadEx();
+          return downloadHrmi(r).then(function (names) {
+            notify(r.files.length > 1 ? 'ดาวน์โหลดไฟล์ ZIP (' + r.files.length + ' ไฟล์) แล้ว' : 'ดาวน์โหลด ' + names[0] + ' แล้ว', 'success');
+            $('hrOut').innerHTML = (r.test ? noteBox('warn', 'bi-exclamation-triangle', 'ไฟล์ทดลอง — ยังมีหน่วยงานที่ยังไม่ปิดรอบ ห้ามนำเข้า HRMi จริง', 'mt-3') : '') +
+              '<div class="mt-3">' + tableBox(['รหัสรายได้', 'ชื่อ', { t: 'คน', n: 1 }, { t: 'จำนวน', n: 1 }], r.preview.map(function (x) { return ['<span class="tag t-clo">' + h(x.code) + '</span>', h(x.name), num(x.people), num(x.qty) + ' ' + h(x.unit)]; })) + '</div>' +
+              noteBox('ok', 'bi-download', 'ดาวน์โหลดแล้ว' + (r.files.length > 1 ? ' <b>' + h(r.zipName) + '.zip</b> — ข้างในมี ' + names.length + ' ไฟล์ แยกตามรหัสรายได้' : '') + ':<div class="small mt-1">' + names.map(h).join(' · ') + '</div>' +
+                '<div class="small-muted mt-1">ถ้าเบราว์เซอร์ไม่ดาวน์โหลดอัตโนมัติ ให้กดปุ่มสร้างไฟล์อีกครั้ง</div>', 'mt-2');
+            loadEx();
+          }, errToast);
         }).catch(function () { });
     });
   }
   var loadEx = function () {
     api('listExports', { ym: S.ym || ym }).then(function (list) {
       $('exList').innerHTML = list.length ? '<div class="d-grid gap-2">' + list.map(function (e) {
-        return '<div class="d-flex align-items-center gap-2 small"><span class="tag t-open">' + h({ HRMI: 'HRMi', SCHEDULE_PDF: 'ตารางเวร', SUMMARY_PDF: 'สรุป', EXCEL: 'Excel' }[e.kind] || e.kind) + '</span>' +
-          '<a class="text-truncate flex-grow-1" href="' + h(e.url) + '" target="_blank" rel="noopener">' + h(e.fileName) + '</a><span class="small-muted text-nowrap">' + h(thaiDT(e.at)) + '</span></div>';
+        return '<div class="d-flex align-items-center gap-2 small"><span class="tag t-open">' + h({ HRMI: 'HRMi', SCHEDULE_PDF: 'พิมพ์ตารางเวร', SUMMARY_PDF: 'พิมพ์สรุป', EXCEL: 'Excel' }[e.kind] || e.kind) + '</span>' +
+          (e.url ? '<a class="text-truncate flex-grow-1" href="' + h(e.url) + '" target="_blank" rel="noopener">' + h(e.fileName) + '</a>' : '<span class="text-truncate flex-grow-1">' + h(e.fileName) + '</span>') +
+          '<span class="small-muted text-nowrap">' + h(e.by || '') + ' · ' + h(thaiDT(e.at)) + '</span></div>';
       }).join('') + '</div>' : emptyBox('bi-folder2-open', 'ยังไม่มีเอกสารในเดือนนี้');
     }).catch(function () { $('exList').innerHTML = ''; });
   };
