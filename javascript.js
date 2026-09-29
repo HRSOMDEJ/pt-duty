@@ -6,7 +6,7 @@
  *  · ล็อกอินรอบเดียว (withBoot) — ลดเวลารอคิวของ Google
  *  · v2: ทุกปุ่มที่บันทึก/ส่ง/สร้าง ใช้ act() — ขึ้นป๊อปอัปบอกว่ากำลังทำอะไร ใช้เวลากี่วินาที และผลเป็นอย่างไร
  */
-var PT_BUILD = '2569-09-29.2';
+var PT_BUILD = '2569-09-29.3';
 var PT_VER = '2.2569';
 var S = { token: null, me: null, boot: null, page: 'home', ym: '', unitId: '', deptId: '' };
 var NET = { active: 0, queue: [], MAX: 4 };

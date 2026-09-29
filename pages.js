@@ -146,12 +146,8 @@ function openSelfBook(ym) {
   var mine = {}; (window.MYROWS || []).forEach(function (r) { (mine[r.day] = mine[r.day] || []).push(r); });
   var picked = {};
   var unitSel = units[0].unitId;
-  var codesFor = function (uid) {
-    var sl = (unitObj(uid) || {}).slots || ['ช', 'บ', 'ด'], out = [];
-    sl.forEach(function (s) { out.push(s); }); sl.forEach(function (s) { out.push(s + '1', s + '2'); });
-    if (sl.length > 1) { out.push(sl.join('')); if (sl.length === 3) out.push(sl[0] + sl[1], sl[1] + sl[2]); }
-    return out;
-  };
+  var lastDate = ym + '-' + ('0' + days).slice(-2);
+  var codesFor = function (uid) { return codesForUnitJs(uid, lastDate); };
   var drawDays = function (root) {
     var box = root.querySelector('#sbDays'), html = DOW.map(function (x) { return '<div class="dh">' + x + '</div>'; }).join('');
     for (var i = 0; i < first; i++) html += '<div></div>';
@@ -167,7 +163,7 @@ function openSelfBook(ym) {
       b.addEventListener('click', function () {
         var d = +b.dataset.d, need = unitNeedWard(unitSel), cur = picked[d] || {};
         openCellPop({
-          anchor: b, codes: codesFor(unitSel), code: cur.code || '', wardId: cur.wardId || '', needWard: need, homeWardId: S.me.homeWardId,
+          anchor: b, codes: codesFor(unitSel), date: ym + '-' + ('0' + d).slice(-2), code: cur.code || '', wardId: cur.wardId || '', needWard: need, homeWardId: S.me.homeWardId,
           title: 'วันที่ ' + d + ' ' + thaiYmJs(ym), sub: h(unitName(unitSel)) + (has = mine[d] ? ' · มีเวรอยู่แล้ว: ' + mine[d].map(function (r) { return r.shiftCode + ' ' + unitName(r.unitId); }).join(', ') : ''),
           onPick: function (code, wardId) {
             if (code) picked[d] = { code: code, wardId: wardId || cur.wardId || '' }; else delete picked[d];
@@ -293,7 +289,8 @@ function renderGrid(d) {
     html += '<td class="tot"><b>' + num(p.shifts) + '</b> เวร' + (p.amount != null ? '<div class="small-muted">' + num(p.amount) + ' ฿</div>' : '') + '</td></tr>';
   });
   if (!d.people.length) html += '<tr><td class="nm">—</td><td colspan="' + (days + 1) + '">' + emptyBox('bi-person-plus', 'ยังไม่มีบุคลากรในตารางนี้', d.canEdit ? 'กด “เพิ่มบุคลากร” เพื่อเริ่มจัดตาราง' : '') + '</td></tr>';
-  html += '</tbody><tfoot>' + quotaRows(d) + '</tfoot></table></div>';
+  d._base = JSON.parse(JSON.stringify({ unit: d.board.unit, dept: d.board.dept }));
+  html += '</tbody><tfoot id="gFoot">' + quotaRows(d) + '</tfoot></table></div>';
   html += '<div class="legend">' +
     '<span><i style="background:var(--bad)"></i>ต้องแก้ไข</span><span><i style="background:var(--warn)"></i>ข้อสังเกต</span>' +
     '<span><i style="background:var(--accent)"></i>หน่วยที่ระบุวันนั้น / แก้แล้วยังไม่บันทึก</span><span><i style="background:var(--day-we)"></i>เสาร์–อาทิตย์</span>' +
@@ -305,6 +302,7 @@ function renderGrid(d) {
 
 function quotaRows(d) {
   var out = '', dn = deptName(d.unit.deptId).replace(/^ฝ่าย/, '');
+  var fmt = function (n) { return n ? String(Math.round(n * 100) / 100) : '·'; };
   ['ช', 'บ', 'ด'].forEach(function (s) {
     if (d.unit.slots.indexOf(s) < 0) return;
     out += '<tr><td class="lb">' + shiftBadge(s) + ' ' + (s === 'ช' ? 'เช้า' : s === 'บ' ? 'บ่าย' : 'ดึก') + ' <span class="small-muted">(หน่วยนี้ · ทั้งฝ่าย' + h(dn) + ')</span></td>';
@@ -312,14 +310,40 @@ function quotaRows(d) {
       var u = d.board.unit[s][day] || 0, dp = d.board.dept[s][day] || 0;
       var lu = d.board.limits.unit[s][day], ld = d.board.limits.dept[s][day];
       var cls = '';
-      if ((lu != null && u > lu) || (ld != null && dp > ld)) cls = 'hot';
-      else if ((lu != null && u === lu && u > 0) || (ld != null && dp === ld && dp > 0)) cls = 'full';
-      out += '<td class="' + cls + '" title="หน่วยนี้ ' + u + (lu != null ? '/' + lu : '') + ' · ทั้งฝ่าย ' + dp + (ld != null ? '/' + ld : '') + '">' + (u || '·') + '</td>';
+      if ((lu != null && u > lu + 1e-9) || (ld != null && dp > ld + 1e-9)) cls = 'hot';
+      else if ((lu != null && Math.abs(u - lu) < 1e-9 && u > 0) || (ld != null && Math.abs(dp - ld) < 1e-9 && dp > 0)) cls = 'full';
+      if (d._chg && d._chg[s + day]) cls += ' chg';
+      out += '<td class="' + cls + '" title="นับกรอบ (ครึ่งเวร = 0.5) · หน่วยนี้ ' + fmt(u) + (lu != null ? '/' + lu : '') + ' · ทั้งฝ่าย ' + fmt(dp) + (ld != null ? '/' + ld : '') + '">' + fmt(u) + '</td>';
     }
     out += '<td class="tot"></td></tr>';
   });
   return out;
 }
+/** v2.3: คำนวณแถวกรอบเวรใหม่ทันทีที่พิมพ์ (ยังไม่ต้องบันทึก) — นับตาม "นับกรอบ" ของรหัสเวร ครึ่งเวร = 0.5 */
+function recalcFoot() {
+  var d = G.data; if (!d || !d._base) return;
+  var now = { 'ช': [], 'บ': [], 'ด': [] }, days = d.calendar.length;
+  d.people.forEach(function (p) {
+    for (var day = 1; day <= days; day++) {
+      var c = p.cells[day]; if (!c || !c.code || c.work === 'ABSENT') continue;
+      var r = parseShiftJs(c.code, d.ym + '-' + ('0' + day).slice(-2));
+      (r.segs || []).forEach(function (g) { now[g.slot][day] = (now[g.slot][day] || 0) + g.quota; });
+    }
+  });
+  var chg = {};
+  ['ช', 'บ', 'ด'].forEach(function (s) {
+    for (var day = 1; day <= days; day++) {
+      var base = (d._base.unit[s] || [])[day] || 0, n = now[s][day] || 0;
+      if (Math.abs(n - base) > 1e-9) chg[s + day] = 1;
+      d.board.unit[s][day] = n;
+      d.board.dept[s][day] = ((d._base.dept[s] || [])[day] || 0) + (n - base);
+    }
+  });
+  d._chg = chg;
+  var f = $('gFoot'); if (f) f.innerHTML = quotaRows(d);
+}
+var _rfT = null;
+function recalcFootSoon() { clearTimeout(_rfT); _rfT = setTimeout(recalcFoot, 120); }
 
 function wireGrid() {
   var tbl = $('grid');
@@ -331,6 +355,7 @@ function wireGrid() {
     G.dirty[p.empCode + '|' + day] = { empCode: p.empCode, day: day, code: c.code, wardId: c.wardId };
     var td = $('c' + ri + '_' + day); if (td) td.classList.add('dirty');
     var btn = $('gSave'); if (btn) { btn.disabled = false; btn.innerHTML = '<i class="bi bi-save"></i> บันทึก (' + Object.keys(G.dirty).length + ')'; }
+    recalcFootSoon();
   };
   var refreshWard = function (ri, day) {
     var p = d.people[ri], c = p.cells[day] || {};
@@ -365,7 +390,7 @@ function wireGrid() {
     if (!wt || !d.canEdit) return;
     var ri = +wt.dataset.r, day = +wt.dataset.d, p = d.people[ri], c = cellOf(ri, day);
     openCellPop({
-      anchor: wt, codes: d.codes, code: c.code, wardId: c.wardId, needWard: d.unit.needWard, homeWardId: p.homeWardId,
+      anchor: wt, codes: d.codes, date: d.ym + '-' + ('0' + day).slice(-2), code: c.code, wardId: c.wardId, needWard: d.unit.needWard, homeWardId: p.homeWardId,
       title: p.empName, sub: 'วันที่ ' + day + ' ' + h(d.monthTh) + (p.homeWard ? ' · สังกัด ' + h(p.homeWard) : ''),
       onPick: function (code, wardId) {
         c.code = code; if (wardId !== undefined) c.wardId = code ? wardId : '';
@@ -771,12 +796,14 @@ PAGES.docs = function () {
     '<label class="form-label">หน่วยงาน</label><select class="form-select mb-3" id="smUnit">' + unitOptions('', units, 'ทุกหน่วยงานที่ท่านดูแล') + '</select>' +
     '<div class="d-flex gap-2"><button class="btn btn-brand flex-grow-1" id="smGo"><i class="bi bi-file-earmark-pdf"></i> PDF สรุป</button><button class="btn btn-ghost flex-grow-1" id="xlGo"><i class="bi bi-file-earmark-excel"></i> Excel รายละเอียด</button></div><div id="smOut"></div></div>';
   if (canHr) {
-    html += '<div class="card-x hov"><div class="card-h"><h3><i class="bi bi-filetype-xlsx"></i> ไฟล์นำเข้า HRMi</h3></div>' +
-      '<p class="small-muted">คอลัมน์: รหัสพนักงาน · เลขบัตร (0) · รหัสรายได้ · จำนวน · 0 · 0 · 0 — ออกได้เฉพาะหน่วยงานที่ปิดรอบแล้ว</p>' +
-      '<div class="row g-2 mb-3"><div class="col-6"><label class="form-label">ฝ่าย</label><select class="form-select" id="hrDept">' + deptOptions(hrDepts.length === 1 ? hrDepts[0].deptId : '', hrDepts.length > 1 ? 'ทุกฝ่ายที่ดูแล' : '', hrDepts.map(function (x) { return x.deptId; })) + '</select></div>' +
-      '<div class="col-6"><label class="form-label">รูปแบบ</label><select class="form-select" id="hrMode"><option value="split">แยกไฟล์ตามรหัสรายได้</option><option value="single">รวมไฟล์เดียว</option></select></div></div>' +
-      '<div class="form-check form-switch mb-3"><input class="form-check-input" type="checkbox" id="hrForce"><label class="form-check-label" for="hrForce">ออกไฟล์ทดลอง (ยังไม่ปิดรอบ — ใช้ตรวจตัวเลขก่อน)</label></div>' +
-      '<button class="btn btn-brand w-100" id="hrGo"><i class="bi bi-filetype-xlsx"></i> สร้างไฟล์ HRMi</button><div id="hrOut"></div></div>';
+    html += '<div class="card-x hov" style="grid-column:1/-1"><div class="card-h"><h3><i class="bi bi-filetype-xlsx"></i> ไฟล์นำเข้า HRMi</h3><span class="sub">เลือกฝ่าย · หน่วยงาน · รหัสรายได้ · บุคลากร แล้วดูตัวเลขก่อนสร้างไฟล์</span></div>' +
+      '<p class="small-muted">คอลัมน์: รหัสพนักงาน · เลขบัตร (0) · รหัสรายได้ · จำนวน · 0 · 0 · 0 — ไฟล์จริงออกได้เฉพาะหน่วยงานที่ปิดรอบแล้ว</p>' +
+      '<div class="row g-2 mb-2"><div class="col-md-4"><label class="form-label">1 · ฝ่าย</label><select class="form-select" id="hrDept">' + deptOptions(hrDepts.length === 1 ? hrDepts[0].deptId : '', hrDepts.length > 1 ? 'ทุกฝ่ายที่ดูแล' : '', hrDepts.map(function (x) { return x.deptId; })) + '</select></div>' +
+      '<div class="col-md-4"><label class="form-label">รูปแบบไฟล์</label><select class="form-select" id="hrMode"><option value="split">แยกไฟล์ตามรหัสรายได้</option><option value="single">รวมไฟล์เดียว</option></select></div>' +
+      '<div class="col-md-4"><label class="form-label">เฉพาะบุคลากร (ถ้าต้องการ)</label><input class="form-control" id="hrEmp" placeholder="เว้นว่าง = ทุกคน · ใส่รหัสพนักงาน คั่นด้วย ,"></div></div>' +
+      '<div id="hrPick"><div class="skeleton" style="height:5em"></div></div>' +
+      '<div class="d-flex flex-wrap gap-3 align-items-center mt-3"><div class="form-check form-switch m-0"><input class="form-check-input" type="checkbox" id="hrForce"><label class="form-check-label" for="hrForce">ออกไฟล์ทดลอง (ยังไม่ปิดรอบ — ใช้ตรวจตัวเลขก่อน)</label></div>' +
+      '<button class="btn btn-brand ms-auto" id="hrGo" style="min-width:220px"><i class="bi bi-filetype-xlsx"></i> สร้างไฟล์ HRMi</button></div><div id="hrOut"></div></div>';
   }
   html += '<div class="card-x"><div class="card-h"><h3><i class="bi bi-clock-history"></i> เอกสารที่เคยออกเดือนนี้</h3></div><div id="exList"><div class="skeleton" style="height:3em"></div></div></div></div>';
   $('view').innerHTML = html;
@@ -795,16 +822,67 @@ PAGES.docs = function () {
     text: function (p) { return h(p.unitId ? unitName(p.unitId) : 'ทุกหน่วยงานที่ดูแล'); }, render: function (r) { return downloadLinks([r]); } });
   run('xlGo', 'smOut', { action: 'exportExcel', title: 'กำลังสร้างไฟล์ Excel', icon: 'bi-file-earmark-excel', payload: function () { return { ym: S.ym || ym, unitId: $('smUnit').value }; },
     text: function (p) { return h(p.unitId ? unitName(p.unitId) : 'ทุกหน่วยงานที่ดูแล'); }, render: function (r) { return downloadLinks([r]); } });
-  if (canHr) run('hrGo', 'hrOut', {
-    action: 'exportHrmi', title: 'กำลังสร้างไฟล์ HRMi', icon: 'bi-filetype-xlsx', steps: ['ตรวจสถานะปิดรอบของทุกหน่วยงาน', 'รวมจำนวนตามรหัสรายได้ × บุคคล', 'สร้างไฟล์และเก็บใน Google Drive'],
-    payload: function () { return { ym: S.ym || ym, deptId: $('hrDept').value, mode: $('hrMode').value, force: $('hrForce').checked }; },
-    text: function (p) { return (p.deptId ? h(deptName(p.deptId)) : 'ทุกฝ่ายที่ดูแล') + (p.force ? ' · ไฟล์ทดลอง' : ''); },
-    render: function (r) {
-      return (r.test ? noteBox('warn', 'bi-exclamation-triangle', 'ไฟล์ทดลอง — ยังมีหน่วยงานที่ยังไม่ปิดรอบ ห้ามนำเข้า HRMi จริง', 'mt-3') : '') +
-        '<div class="mt-3">' + tableBox(['รหัสรายได้', 'ชื่อ', { t: 'คน', n: 1 }, { t: 'จำนวน', n: 1 }], r.preview.map(function (x) { return ['<span class="tag t-clo">' + h(x.code) + '</span>', h(x.name), num(x.people), num(x.qty) + ' ' + h(x.unit)]; })) + '</div>' +
-        downloadLinks(r.files) + '<div class="small-muted mt-2">ทั้งหมดอยู่ใน <a href="' + h(r.folderUrl) + '" target="_blank" rel="noopener">โฟลเดอร์ Google Drive</a></div>';
-    }
-  });
+  if (canHr) {
+    var HR = { units: null, codes: null };
+    var hrEmps = function () { return ($('hrEmp').value.match(/\d{3,10}/g) || []); };
+    var hrPreview = function (keepUnits) {
+      var pl = { ym: S.ym || ym, deptId: $('hrDept').value, empCodes: hrEmps() };
+      if (keepUnits && HR.units) pl.unitIds = HR.units;
+      $('hrPick').innerHTML = '<div class="skeleton" style="height:5em"></div>';
+      api('previewHrmi', pl, { fresh: true }).then(function (r) {
+        if (!keepUnits) HR.units = r.units.map(function (u) { return u.unitId; });
+        HR.codes = r.codes.map(function (x) { return x.code; });
+        var q = function (x) { return num(x.qty) + ' ' + h(x.unit); };
+        $('hrPick').innerHTML =
+          '<label class="form-label mt-1">2 · หน่วยงาน <span class="small-muted">(แตะเพื่อเลือก/ไม่เลือก)</span></label><div class="hr-units mb-3">' + r.units.map(function (u) {
+            var on = HR.units.indexOf(u.unitId) >= 0;
+            return '<label class="chip' + (on ? ' on' : '') + '" style="cursor:pointer"><input type="checkbox" data-u="' + u.unitId + '"' + (on ? ' checked' : '') + ' hidden>' + (on ? '<i class="bi bi-check-lg"></i> ' : '') + h(u.name) + ' ' + (u.closed ? '<span class="tag t-ok">ปิดรอบแล้ว</span>' : '<span class="tag t-open">' + h(u.statusTh || u.status) + '</span>') + '</label>';
+          }).join('') + '</div>' +
+          (r.notClosed.length ? noteBox('warn', 'bi-exclamation-triangle', 'ยังไม่ปิดรอบ ' + r.notClosed.length + ' หน่วยงาน — สร้างได้เฉพาะ “ไฟล์ทดลอง” หรือเลือกเฉพาะหน่วยที่ปิดรอบแล้ว', 'mb-3') : '') +
+          '<div class="d-flex align-items-center gap-2"><label class="form-label m-0">3 · รหัสรายได้</label><span class="ms-auto"></span>' +
+          '<button type="button" class="btn btn-sm btn-ghost" id="hrAll">เลือกทั้งหมด</button><button type="button" class="btn btn-sm btn-ghost" id="hrNone">ไม่เลือก</button></div>' +
+          (r.codes.length ? '<div class="hr-codes mt-2">' + r.codes.map(function (x) {
+            return '<label class="hr-code"><input type="checkbox" data-code="' + h(x.code) + '" checked><span class="tag t-clo">' + h(x.code) + '</span><span class="nm"><b>' + h(x.name || '') + '</b><small>' + x.people + ' คน</small></span><span class="q">' + q(x) + '<br><span class="small-muted">' + num(x.amount) + ' ฿</span></span></label>';
+          }).join('') + '</div>' : emptyBox('bi-inbox', 'ไม่มีรายการตามเงื่อนไขนี้', 'ลองเลือกหน่วยงาน/เดือนอื่น')) +
+          '<div class="hr-sum" id="hrSum"></div>';
+        var sum = function () {
+          var sel = $$('#hrPick [data-code]').filter(function (x) { return x.checked; }).map(function (x) { return x.dataset.code; });
+          var picked = r.codes.filter(function (x) { return sel.indexOf(x.code) >= 0; });
+          $$('#hrPick .hr-code').forEach(function (l) { l.classList.toggle('off', !l.querySelector('input').checked); });
+          $('hrSum').innerHTML = '<span>เลือก <b>' + picked.length + '</b>/' + r.codes.length + ' รหัส</span><span>รวม <b>' + num(picked.reduce(function (a, x) { return a + x.amount; }, 0)) + '</b> ฿</span><span>' + (HR.units.length) + ' หน่วยงาน</span>' + (hrEmps().length ? '<span>เฉพาะ ' + hrEmps().length + ' คน</span>' : '');
+        };
+        $$('#hrPick [data-code]').forEach(function (x) { x.addEventListener('change', sum); });
+        if ($('hrAll')) $('hrAll').addEventListener('click', function () { $$('#hrPick [data-code]').forEach(function (x) { x.checked = true; }); sum(); });
+        if ($('hrNone')) $('hrNone').addEventListener('click', function () { $$('#hrPick [data-code]').forEach(function (x) { x.checked = false; }); sum(); });
+        $$('#hrPick [data-u]').forEach(function (x) {
+          x.addEventListener('change', function () {
+            var u = x.dataset.u, i = HR.units.indexOf(u);
+            if (i >= 0) HR.units.splice(i, 1); else HR.units.push(u);
+            if (!HR.units.length) { HR.units.push(u); x.checked = true; notify('ต้องเลือกอย่างน้อย 1 หน่วยงาน', 'info'); return; }
+            hrPreview(true);
+          });
+        });
+        sum();
+      }).catch(function (e) { $('hrPick').innerHTML = noteBox('bad', 'bi-x-octagon', h(e.message)); });
+    };
+    $('hrDept').addEventListener('change', function () { HR.units = null; hrPreview(false); });
+    var et = null; $('hrEmp').addEventListener('input', function () { clearTimeout(et); et = setTimeout(function () { hrPreview(true); }, 700); });
+    hrPreview(false);
+    $('hrGo').addEventListener('click', function () {
+      var codes = $$('#hrPick [data-code]').filter(function (x) { return x.checked; }).map(function (x) { return x.dataset.code; });
+      if (HR.codes && !codes.length) { alertBox('ยังไม่ได้เลือกรหัสรายได้', 'เลือกอย่างน้อย 1 รหัส', 'info'); return; }
+      var p = { ym: S.ym || ym, deptId: $('hrDept').value, unitIds: HR.units || [], codes: codes.length === (HR.codes || []).length ? [] : codes, empCodes: hrEmps(), mode: $('hrMode').value, force: $('hrForce').checked };
+      act({ action: 'exportHrmi', payload: p, title: 'กำลังสร้างไฟล์ HRMi', text: (p.deptId ? h(deptName(p.deptId)) : 'ทุกฝ่ายที่ดูแล') + ' · ' + codes.length + ' รหัส' + (p.force ? ' · ไฟล์ทดลอง' : ''), icon: 'bi-filetype-xlsx',
+        steps: ['ตรวจสถานะปิดรอบของหน่วยงานที่เลือก', 'รวมจำนวนตามรหัสรายได้ × บุคคล', 'สร้างไฟล์และเก็บใน Google Drive'],
+        done: function () { return { title: 'สร้างไฟล์ HRMi เรียบร้อย', html: 'ดาวน์โหลดได้ใต้ปุ่ม หรือในรายการ “เอกสารที่เคยออก”', timer: 1800 }; } })
+        .then(function (r) {
+          $('hrOut').innerHTML = (r.test ? noteBox('warn', 'bi-exclamation-triangle', 'ไฟล์ทดลอง — ยังมีหน่วยงานที่ยังไม่ปิดรอบ ห้ามนำเข้า HRMi จริง', 'mt-3') : '') +
+            '<div class="mt-3">' + tableBox(['รหัสรายได้', 'ชื่อ', { t: 'คน', n: 1 }, { t: 'จำนวน', n: 1 }], r.preview.map(function (x) { return ['<span class="tag t-clo">' + h(x.code) + '</span>', h(x.name), num(x.people), num(x.qty) + ' ' + h(x.unit)]; })) + '</div>' +
+            downloadLinks(r.files) + '<div class="small-muted mt-2">ทั้งหมดอยู่ใน <a href="' + h(r.folderUrl) + '" target="_blank" rel="noopener">โฟลเดอร์ Google Drive</a></div>';
+          loadEx();
+        }).catch(function () { });
+    });
+  }
   var loadEx = function () {
     api('listExports', { ym: S.ym || ym }).then(function (list) {
       $('exList').innerHTML = list.length ? '<div class="d-grid gap-2">' + list.map(function (e) {

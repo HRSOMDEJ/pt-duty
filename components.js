@@ -172,9 +172,66 @@ function pipeline(st) {
 }
 function shiftBadge(code) {
   var c = String(code || '');
-  var k = c.charAt(0);
-  return '<span class="sc ' + (/[ชบด]/.test(k) && c.length <= 2 ? 'sc-' + k : '') + '">' + h(c || '—') + '</span>';
+  var seg = c ? parseShiftJs(c) : null, k = seg && seg.segs && seg.segs.length === 1 ? seg.segs[0].slot : (/^[ชบด]/.test(c) && c.length <= 2 ? c.charAt(0) : '');
+  return '<span class="sc ' + (k ? 'sc-' + k : '') + '">' + h(c || '—') + '</span>';
 }
+
+/* ---------------------------------------------------------------- รหัสเวร (v2.3 — คิดแบบเดียวกับหลังบ้าน Shifts.gs) */
+var SLOT_NAME = { 'ช': 'เวรเช้า', 'บ': 'เวรบ่าย', 'ด': 'เวรดึก' };
+function hm2m(s) { if (String(s) === '24:00') return 1440; var m = String(s || '').match(/^(\d{1,2}):(\d{2})/); return m ? +m[1] * 60 + +m[2] : null; }
+function m2hm(m, isEnd) { if (isEnd && m > 0 && m % 1440 === 0) return '24:00'; m = ((m % 1440) + 1440) % 1440; return ('0' + Math.floor(m / 60)).slice(-2) + ':' + ('0' + (m % 60)).slice(-2); }
+function shiftDefOfJs(r) {
+  var st = hm2m(r.start), en = hm2m(r.end); if (st == null || en == null) return null;
+  var off = r.nextDay === 'TRUE' ? 1440 : 0, s = st + off, e = en + off; if (e <= s) e += 1440;
+  var v = isNaN(+r.value) || r.value === '' ? 1 : +r.value;
+  return { code: r.code, name: r.name || r.code, slot: r.slot, start: s, end: e, value: v, quota: r.quota === '' || r.quota == null || isNaN(+r.quota) ? v : +r.quota, pay: r.pay || '', ord: +r.ord || 99, nextDay: r.nextDay === 'TRUE' };
+}
+var _scCache = {}, _scBoot = null;
+/** นิยามรหัสเวร ณ วันที่ (ไม่ใส่ = วันนี้) */
+function shiftDefsAt(dateStr) {
+  var d = String(dateStr || todayStr()).slice(0, 10);
+  if (_scBoot !== S.boot) { _scCache = {}; _scBoot = S.boot; }   // ข้อมูลตั้งค่าเปลี่ยน → คิดใหม่
+  if (_scCache[d]) return _scCache[d];
+  var rows = (S.boot && S.boot.shiftCodes) || [], best = {};
+  rows.forEach(function (r) { if (!r.code || (r.effectiveFrom && r.effectiveFrom > d)) return; var cur = best[r.code]; if (!cur || (r.effectiveFrom || '') >= (cur.effectiveFrom || '')) best[r.code] = r; });
+  var map = {};
+  Object.keys(best).forEach(function (k) { if (best[k].active === 'FALSE') return; var df = shiftDefOfJs(best[k]); if (df && SLOT_NAME[df.slot]) map[k] = df; });
+  var list = Object.keys(map).map(function (k) { return map[k]; }).sort(function (a, b) { return b.code.length - a.code.length || a.ord - b.ord; });
+  return (_scCache[d] = { map: map, list: list });
+}
+function scReset() { _scCache = {}; }
+/** แยกรหัส → {segs:[...]} หรือ {err} หรือ {empty:true} */
+function parseShiftJs(code, dateStr) {
+  var s = String(code || '').replace(/\s+/g, ''); if (!s) return { empty: true };
+  var defs = shiftDefsAt(dateStr), out = [], rest = s, st = (S.boot && S.boot.settings) || {};
+  while (rest.length) {
+    var hit = null;
+    for (var i = 0; i < defs.list.length; i++) if (rest.indexOf(defs.list[i].code) === 0) { hit = defs.list[i]; break; }
+    if (!hit) return { err: 'ไม่รู้จักรหัส “' + rest + '”' };
+    out.push(hit); rest = rest.slice(hit.code.length);
+  }
+  if (out.length > 1) {
+    if (st.allowCombo === false) return { err: 'ระบบปิดการลงเวรผสม' };
+    if (out.length > (st.comboMax || 3)) return { err: 'เวรผสมได้ไม่เกิน ' + (st.comboMax || 3) + ' ช่วง' };
+    for (var a = 0; a < out.length; a++) for (var b = a + 1; b < out.length; b++)
+      if (out[a].start < out[b].end && out[b].start < out[a].end) return { err: 'ช่วง ' + out[a].code + ' กับ ' + out[b].code + ' เวลาทับกัน' };
+  }
+  out = out.slice().sort(function (x, y) { return x.start - y.start; });
+  return { segs: out };
+}
+/** รหัสที่หน่วยงานลงได้ (ปุ่มลัด) — แบบเดียวกับ allowedCodes_ */
+function codesForUnitJs(unitId, dateStr) {
+  var u = unitObj(unitId) || {}, slots = u.slots || ['ช', 'บ', 'ด'], defs = shiftDefsAt(dateStr);
+  var ok = function (code) { var p = parseShiftJs(code, dateStr); return p.segs && p.segs.every(function (g) { return slots.indexOf(g.slot) >= 0; }); };
+  var singles = defs.list.slice().sort(function (a, b) { return a.ord - b.ord; }).filter(function (d) { return slots.indexOf(d.slot) >= 0; }).map(function (d) { return d.code; });
+  var quick = String(((S.boot || {}).settings || {}).comboQuick || '').split(/[,\s]+/).filter(function (c) { return c && singles.indexOf(c) < 0 && ok(c); });
+  return singles.concat(quick);
+}
+function shiftTextJs(code, dateStr) {
+  var p = parseShiftJs(code, dateStr); if (!p.segs) return '';
+  return p.segs.map(function (g) { return g.name + ' ' + m2hm(g.start) + '–' + m2hm(g.end, true); }).join(', ');
+}
+
 function personCell(name, sub, av) {
   return '<div class="person">' + (av === false ? '' : '<div class="avatar sm">' + h(initials(name)) + '</div>') + '<div style="min-width:0"><b>' + h(name) + '</b>' + (sub ? '<small>' + sub + '</small>' : '') + '</div></div>';
 }
@@ -228,7 +285,7 @@ function chipValues(root, name) {
 function tableBox(head, rows, opt) {
   opt = opt || {};
   if (!rows.length) return opt.emptyHtml || emptyBox(opt.emptyIcon || 'bi-inbox', opt.empty || 'ไม่มีข้อมูล', opt.emptyText || '');
-  return '<div class="tbox" ' + (opt.maxh ? 'style="max-height:' + opt.maxh + '"' : '') + '><table class="tb"><thead><tr>' +
+  return '<div class="tbox' + (opt.cls ? ' ' + opt.cls : '') + '" ' + (opt.maxh ? 'style="max-height:' + opt.maxh + '"' : '') + '><table class="tb"><thead><tr>' +
     head.map(function (x) { return '<th' + (x.n ? ' class="n"' : '') + (x.w ? ' style="width:' + x.w + '"' : '') + '>' + h(x.t || x) + '</th>'; }).join('') +
     '</tr></thead><tbody>' +
     rows.map(function (r) {
@@ -293,17 +350,21 @@ function openCellPop(opt) {
   closePop();
   var pop = document.createElement('div');
   pop.className = 'pop';
-  var codes = opt.codes || [];
-  var singles = codes.filter(function (c) { return c.length === 1; });
-  var halves = codes.filter(function (c) { return c.length === 2 && /[12]$/.test(c); });
-  var combos = codes.filter(function (c) { return c.length > 1 && !/^[ชบด][12]$/.test(c); });
+  var codes = opt.codes || [], defs = shiftDefsAt(opt.date);
+  // v2.3: จัดกลุ่มตามนิยามรหัสเวรจริง (เต็มเวร · บางช่วง · เวรผสม) และบอกเวลาในปุ่ม
+  var singles = codes.filter(function (c) { return defs.map[c] && defs.map[c].value >= 1; });
+  var halves = codes.filter(function (c) { return defs.map[c] && defs.map[c].value < 1; });
+  var combos = codes.filter(function (c) { return !defs.map[c]; });
   var wards = S.boot.wards || [];
-  var btn = function (c) { return '<button type="button" data-c="' + c + '"' + (c === opt.code ? ' class="on"' : '') + '>' + c + '</button>'; };
+  var btn = function (c) {
+    var d = defs.map[c], t = d ? m2hm(d.start) + '–' + m2hm(d.end, true) : shiftTextJs(c, opt.date);
+    return '<button type="button" data-c="' + h(c) + '" title="' + h(d ? d.name + ' ' + t + ' · ' + d.value + ' เวร' : t) + '"' + (c === opt.code ? ' class="on"' : '') + '>' + h(c) + (d ? '<small>' + t.replace(/:00/g, '') + '</small>' : '') + '</button>';
+  };
   pop.innerHTML =
     '<div class="pt">' + h(opt.title || 'เลือกเวร') + '</div>' + (opt.sub ? '<div class="small-muted" style="margin:-6px 0 8px">' + opt.sub + '</div>' : '') +
     '<h4><i class="bi bi-clock"></i> เต็มเวร</h4><div class="qs">' + singles.map(btn).join('') + '<button type="button" class="clr" data-c=""><i class="bi bi-eraser"></i> ล้าง</button></div>' +
-    (halves.length ? '<h4><i class="bi bi-circle-half"></i> ครึ่งเวร (0.5)</h4><div class="qs">' + halves.map(btn).join('') + '</div>' : '') +
-    (combos.length ? '<h4><i class="bi bi-layers"></i> รหัสผสม</h4><div class="qs">' + combos.filter(function (c) { return !/[12]/.test(c); }).concat(combos.filter(function (c) { return /[12]/.test(c); }).slice(0, 6)).map(btn).join('') + '</div>' : '') +
+    (halves.length ? '<h4><i class="bi bi-circle-half"></i> ครึ่งเวร / บางช่วง</h4><div class="qs">' + halves.map(btn).join('') + '</div>' : '') +
+    (combos.length ? '<h4><i class="bi bi-layers"></i> เวรผสม <span class="small-muted" style="font-weight:400">— หรือพิมพ์รหัสต่อกันเองในตาราง</span></h4><div class="qs">' + combos.map(btn).join('') + '</div>' : '') +
     (opt.needWard
       ? '<h4><i class="bi bi-geo-alt"></i> หน่วยที่ไปปฏิบัติของวันนี้</h4>' +
         '<input class="form-control form-control-sm mb-2" id="popSearch" placeholder="พิมพ์ค้นหา เช่น 19A, CCU">' +

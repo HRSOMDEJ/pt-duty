@@ -10,7 +10,7 @@ PAGES.setup = function () {
     window.ADM = d;
     var tabs = [
       ['depts', 'ฝ่าย', 'bi-diagram-3', d.depts.length], ['units', 'หน่วยงาน', 'bi-buildings', d.units.length], ['wards', 'หน่วยปลายทาง', 'bi-geo-alt', d.wards.length],
-      ['positions', 'ตำแหน่ง', 'bi-person-vcard', d.positions.length], ['rates', 'อัตรา / รหัสรายได้', 'bi-cash-coin', d.rates.length], ['quotas', 'กรอบเวร', 'bi-bar-chart-steps', d.quotas.length],
+      ['shifts', 'รหัสเวร', 'bi-clock-history', (d.shiftCodes || []).length], ['positions', 'ตำแหน่ง', 'bi-person-vcard', d.positions.length], ['rates', 'อัตรา / รหัสรายได้', 'bi-cash-coin', d.rates.length], ['quotas', 'กรอบเวร', 'bi-bar-chart-steps', d.quotas.length],
       ['cal', 'ปฏิทินวันหยุด', 'bi-calendar-heart', d.calendar.length], ['win', 'ช่วงลงตารางเวร', 'bi-calendar-range', d.windows.length], ['opt', 'ค่าตั้งค่าระบบ', 'bi-gear', '']
     ];
     $('view').innerHTML = pageHead('bi-sliders', 'ตั้งค่าและข้อมูลหลัก', GUIDE.setup.lead,
@@ -92,6 +92,50 @@ function admTab(t) {
         }), { maxh: '58vh', empty: 'ยังไม่มีอัตรา', emptyIcon: 'bi-cash-coin' });
     };
     rr(''); $('rtDept').addEventListener('change', function () { rr(this.value); });
+  } else if (t === 'shifts') {
+    var sc = d.shiftCodes || [], today = todayStr();
+    var cur = {}; sc.forEach(function (r) { if ((r.effectiveFrom || '') <= today && (!cur[r.code] || (r.effectiveFrom || '') >= (cur[r.code].effectiveFrom || ''))) cur[r.code] = r; });
+    var LO = 360, HI = 1920, pc = function (m) { return ((m - LO) / (HI - LO) * 100).toFixed(2) + '%'; };
+    var bar = function (r) {
+      var df = shiftDefOfJs(r); if (!df) return '';
+      return '<div class="tl" title="06:00 → 08:00 วันถัดไป"><i class="tl-s-' + h(df.slot) + '" style="left:' + pc(Math.max(LO, df.start)) + ';width:calc(' + pc(Math.min(HI, df.end)) + ' - ' + pc(Math.max(LO, df.start)) + ')"></i><span class="mid" style="left:' + pc(1440) + '"></span></div>';
+    };
+    var st = d.settings;
+    box.innerHTML = '<div class="d-grid gap-3">' +
+      admCard('bi-clock-history', 'รหัสเวร', 'กำหนดรหัส ช่วงเวลา จำนวนเวร การนับกรอบ และวิธีคิดเงิน', admin ? '<button class="btn btn-sm btn-brand" onclick="editShift()"><i class="bi bi-plus-lg"></i> เพิ่มรหัสเวร</button>' : '',
+        noteBox('info', 'bi-lightbulb', '<b>กลุ่มช่วงเวร</b> (เช้า/บ่าย/ดึก) ใช้จับคู่ <b>อัตรา/รหัสรายได้</b> และ <b>กรอบเวร</b> · <b>นับกรอบ</b> ครึ่งเวร = 0.5 ของกรอบช่วงนั้น · แก้ความหมายรหัสแล้วไม่อยากให้กระทบเดือนเก่า ให้กด <b>เพิ่มฉบับใหม่</b> พร้อมวันที่มีผล', 'mb-3') +
+        tableBox(['รหัส', 'ชื่อ', 'กลุ่ม', 'เวลา', { t: 'นับเวร', n: 1 }, { t: 'นับกรอบ', n: 1 }, 'คิดเงิน', 'มีผลตั้งแต่', 'สถานะ', ''], sc.map(function (r) {
+          var df = shiftDefOfJs(r), old = cur[r.code] && cur[r.code] !== r && (r.effectiveFrom || '') < (cur[r.code].effectiveFrom || '');
+          return ['<span style="font-size:1.05rem">' + shiftBadge(r.code) + '</span>' + (old ? ' <span class="tag t-arc">ฉบับเก่า</span>' : (r.effectiveFrom || '') > today ? ' <span class="tag t-info">ฉบับถัดไป</span>' : ''),
+            '<b>' + h(r.name) + '</b>' + (r.note ? '<div class="small-muted">' + h(r.note) + '</div>' : ''),
+            h(SLOT_NAME[r.slot] || r.slot),
+            '<div class="t">' + (df ? m2hm(df.start) + '–' + m2hm(df.end, true) + (df.start >= 1440 ? ' <span class="small-muted">(หลังเที่ยงคืน)</span>' : df.end > 1440 ? ' <span class="small-muted">(ข้ามคืน)</span>' : '') : '<span class="text-danger">เวลาไม่ถูกต้อง</span>') + '</div>' + bar(r),
+            '<b>' + num(r.value) + '</b>', '<b>' + num(r.quota === '' ? r.value : r.quota) + '</b>',
+            h({ '': 'ตามตำแหน่ง', SHIFT: 'รายเวร', HOUR: 'รายชั่วโมง' }[r.pay || ''] || r.pay), h(thaiDate(r.effectiveFrom)), onOff(r.active),
+            admin ? '<div class="d-flex gap-1">' + editBtn('editShift', r) + '<button class="btn btn-sm btn-ghost" title="เพิ่มฉบับใหม่ (มีผลตั้งแต่วันที่ใหม่)" onclick="editShift(REG[\'' + reg('nv' + Math.random().toString(36).slice(2, 8), Object.assign({}, r, { scId: '', effectiveFrom: '', _newVer: true })) + '\'])"><i class="bi bi-plus-square"></i></button></div>' : ''];
+        }), { maxh: '60vh', cls: 'sc-tbl' })) +
+      '<div class="grid-auto" style="--min:320px">' +
+      admCard('bi-magic', 'ทดลองพิมพ์รหัส', '', '', '<input class="form-control form-control-lg mb-2" id="scTry" placeholder="เช่น ช1บ1 หรือ ชบ" value="ช1บ1"><div id="scOut"></div>') +
+      admCard('bi-layers', 'เวรผสม', 'พิมพ์รหัสต่อกัน เช่น ชบ · ช1บ1', '',
+        '<div class="form-check form-switch mb-3"><input class="form-check-input" type="checkbox" id="cbAllow"' + (st.allowCombo !== false ? ' checked' : '') + (admin ? '' : ' disabled') + '><label class="form-check-label" for="cbAllow">อนุญาตให้ลงเวรผสมในวันเดียว<div class="form-text mt-0">ห้ามช่วงเวลาทับกันเสมอ</div></label></div>' +
+        '<label class="form-label">ผสมได้สูงสุด (ช่วง/วัน)</label><input class="form-control mb-3" id="cbMax" inputmode="numeric" value="' + h(st.comboMax || 3) + '"' + (admin ? '' : ' disabled') + '>' +
+        '<label class="form-label">ปุ่มลัดเวรผสมในป๊อปเลือกเวร</label><input class="form-control mb-1" id="cbQuick" value="' + h(st.comboQuick || '') + '"' + (admin ? '' : ' disabled') + '><div class="form-text mb-3">คั่นด้วย , เช่น ชบ,บด,ชบด,ช1บ1</div>' +
+        (admin ? '<button class="btn btn-brand w-100" id="cbSave"><i class="bi bi-save"></i> บันทึกกติกาเวรผสม</button>' : '')) +
+      '</div></div>';
+    var tryIt = function () {
+      var v = $('scTry').value.trim(), r = parseShiftJs(v, today);
+      if (r.empty) { $('scOut').innerHTML = ''; return; }
+      if (r.err) { $('scOut').innerHTML = noteBox('bad', 'bi-x-octagon', h(r.err)); return; }
+      var val = 0, q = {}, hrs = 0;
+      r.segs.forEach(function (g) { val += g.value; hrs += (g.end - g.start) / 60; q[g.slot] = (q[g.slot] || 0) + g.quota; });
+      $('scOut').innerHTML = '<div class="d-grid gap-1">' + r.segs.map(function (g) { return '<div class="d-flex gap-2 align-items-center">' + shiftBadge(g.code) + '<span>' + h(g.name) + '</span><span class="ms-auto small-muted">' + m2hm(g.start) + '–' + m2hm(g.end, true) + '</span></div>'; }).join('') + '</div>' +
+        '<div class="hr-sum"><span>นับ <b>' + num(val) + '</b> เวร</span><span><b>' + num(hrs) + '</b> ชั่วโมง</span><span>กรอบ: ' + Object.keys(q).map(function (k) { return h(k) + ' <b>' + num(q[k]) + '</b>'; }).join(' · ') + '</span></div>';
+    };
+    $('scTry').addEventListener('input', tryIt); tryIt();
+    if ($('cbSave')) $('cbSave').addEventListener('click', function () {
+      var items = { allowCombo: $('cbAllow').checked, comboMax: $('cbMax').value, comboQuick: $('cbQuick').value.replace(/\s+/g, '') };
+      act({ action: 'saveSettings', payload: { items: items }, title: 'กำลังบันทึกกติกาเวรผสม', icon: 'bi-layers', done: 'บันทึกเรียบร้อย' }).then(admReload).catch(function () { });
+    });
   } else if (t === 'quotas') {
     box.innerHTML = admCard('bi-bar-chart-steps', 'กรอบเวร (3 ชั้น)', '', '<button class="btn btn-sm btn-brand" onclick="editQuota()"><i class="bi bi-plus-lg"></i> เพิ่มกรอบ</button>',
       '<div class="flow-map mb-3">' + [['bi-diagram-3', 'ทั้งฝ่าย', 'เพดานรวมทุกหน่วยงานในฝ่ายต่อวัน'], ['bi-buildings', 'รายหน่วยงาน', 'เพดานของหน่วยงานนั้น'], ['bi-geo-alt', 'ราย ward', 'จำกัดหน่วยปลายทาง (ไม่ตั้ง = ไม่จำกัด)']]
@@ -237,6 +281,60 @@ function doMergeWards() {
     }
   });
 }
+/** เพิ่ม/แก้รหัสเวร (v2.3) */
+function editShift(x) {
+  var isNew = !x || !x.scId;
+  x = x || { scId: '', code: '', name: '', slot: 'ช', start: '08:00', end: '16:00', nextDay: 'FALSE', value: '1', quota: '', pay: '', active: 'TRUE', ord: '', effectiveFrom: '', note: '' };
+  var ver = !!x._newVer;
+  modal({
+    title: ver ? 'เพิ่มฉบับใหม่ของรหัส ' + x.code : isNew ? 'เพิ่มรหัสเวร' : 'แก้ไขรหัสเวร ' + x.code, icon: 'bi-clock-history', size: 'lg',
+    sub: ver ? 'ฉบับใหม่มีผลตั้งแต่วันที่ที่ระบุ เดือนก่อนหน้ายังคิดตามฉบับเดิม' : 'ใช้ได้ทันทีกับทุกหน้า: ตารางเวร ลงเวรเอง เอกสาร และไฟล์ HRMi',
+    body: '<div class="row g-3">' +
+      '<div class="col-md-3"><label class="form-label">รหัส *</label><input class="form-control form-control-lg" id="scC" maxlength="6" value="' + h(x.code) + '"' + (ver ? ' readonly' : '') + ' placeholder="เช่น ช4"></div>' +
+      '<div class="col-md-5"><label class="form-label">ชื่อเรียก</label><input class="form-control form-control-lg" id="scN" value="' + h(x.name) + '" placeholder="เช่น เช้าพิเศษ"></div>' +
+      '<div class="col-md-4"><label class="form-label">กลุ่มช่วงเวร *</label><select class="form-select form-select-lg" id="scS">' + ['ช', 'บ', 'ด'].map(function (s) { return '<option value="' + s + '"' + (s === x.slot ? ' selected' : '') + '>' + s + ' · ' + SLOT_NAME[s] + '</option>'; }).join('') + '</select></div>' +
+      '<div class="col-6 col-md-3"><label class="form-label">เวลาเริ่ม</label><input class="form-control" id="scB" inputmode="numeric" placeholder="HH:MM" value="' + h(x.start) + '"></div>' +
+      '<div class="col-6 col-md-3"><label class="form-label">เวลาเลิก</label><input class="form-control" id="scE" value="' + h(x.end) + '" placeholder="HH:MM หรือ 24:00"></div>' +
+      '<div class="col-md-6 d-flex align-items-end"><div class="form-check form-switch mb-2"><input class="form-check-input" type="checkbox" id="scX"' + (x.nextDay === 'TRUE' ? ' checked' : '') + '><label class="form-check-label" for="scX">เริ่มหลังเที่ยงคืน (เช้ามืดของวันถัดไป)<div class="form-text mt-0">เช่น เวรดึก ลงวันที่ 5 = 00:00–08:00 ของวันที่ 6</div></label></div></div>' +
+      '<div class="col-6 col-md-3"><label class="form-label">นับเป็น (เวร)</label><input class="form-control" id="scV" inputmode="decimal" value="' + h(x.value) + '"><div class="form-text">ใช้คิดเงินและยอด HRMi</div></div>' +
+      '<div class="col-6 col-md-3"><label class="form-label">นับกรอบ</label><input class="form-control" id="scQ" inputmode="decimal" value="' + h(x.quota) + '" placeholder="เท่ากับนับเวร"><div class="form-text">ครึ่งเวร = 0.5</div></div>' +
+      '<div class="col-md-6"><label class="form-label">วิธีคิดค่าตอบแทน</label>' + chipGroup('scP', [{ v: '', t: 'ตามตำแหน่ง' }, { v: 'SHIFT', t: 'รายเวร' }, { v: 'HOUR', t: 'รายชั่วโมง' }], [x.pay || ''], { single: true }) + '</div>' +
+      '<div class="col-6 col-md-3"><label class="form-label">มีผลตั้งแต่</label><input class="form-control" id="scF" type="date" value="' + h(x.effectiveFrom === '2020-01-01' && !ver ? '' : x.effectiveFrom) + '"></div>' +
+      '<div class="col-6 col-md-3"><label class="form-label">ลำดับแสดง</label><input class="form-control" id="scO" inputmode="numeric" value="' + h(x.ord) + '"></div>' +
+      '<div class="col-md-6"><label class="form-label">หมายเหตุ</label><input class="form-control" id="scT" value="' + h(x.note) + '"></div>' +
+      '<div class="col-12"><div id="scPrev"></div></div></div>' +
+      noteBox('info', 'bi-cash-coin', 'รหัสรายได้/อัตรา: ระบบหาอัตราที่ตั้งไว้ <b>เฉพาะรหัสนี้</b> ก่อน (แท็บอัตรา › ช่วงเวร = รหัสนี้) ถ้าไม่มีจะใช้อัตราของกลุ่มช่วงเวร', 'mt-3') +
+      (!isNew && !ver ? '<div class="d-flex justify-content-between align-items-center mt-3"><div class="form-check form-switch"><input class="form-check-input" type="checkbox" id="scA"' + (x.active !== 'FALSE' ? ' checked' : '') + '><label class="form-check-label" for="scA">เปิดใช้งาน</label></div><button type="button" class="btn btn-sm btn-ghost text-danger" id="scDel"><i class="bi bi-trash"></i> ลบ</button></div>' : ''),
+    okText: 'บันทึกรหัสเวร', okIcon: 'bi-save',
+    onOpen: function (root) {
+      wireChips(root);
+      var prev = function () {
+        var r = { code: $('scC').value, name: $('scN').value, slot: $('scS').value, start: $('scB').value, end: $('scE').value, nextDay: $('scX').checked ? 'TRUE' : 'FALSE', value: $('scV').value, quota: $('scQ').value };
+        var df = shiftDefOfJs(r);
+        $('scPrev').innerHTML = df ? '<div class="hr-sum"><span>' + shiftBadge(r.code || '?') + ' ' + h(SLOT_NAME[r.slot]) + '</span><span><b>' + m2hm(df.start) + '–' + m2hm(df.end, true) + '</b>' + (df.start >= 1440 ? ' ของวันถัดไป' : df.end > 1440 ? ' (ข้ามคืน)' : '') + '</span><span><b>' + num((df.end - df.start) / 60) + '</b> ชม.</span><span>นับ <b>' + num(df.value) + '</b> เวร · กรอบ <b>' + num(df.quota) + '</b></span></div>' : noteBox('bad', 'bi-x-octagon', 'เวลาไม่ถูกต้อง ใช้รูปแบบ HH:MM');
+      };
+      $$('input,select', root).forEach(function (el) { el.addEventListener('input', prev); el.addEventListener('change', prev); });
+      prev();
+      if ($('scDel')) $('scDel').addEventListener('click', function () {
+        confirmX({ title: 'ลบรหัส ' + x.code + '?', html: 'ลบได้เฉพาะรหัสที่ยังไม่มีเวรใช้ — ถ้ามีเวรใช้แล้วให้ปิดใช้งานแทน', ok: 'ลบ', danger: true }).then(function (y) {
+          if (!y) return;
+          bootstrap.Modal.getOrCreateInstance($('mdl')).hide();
+          act({ action: 'saveShiftCode', payload: { remove: true, item: { scId: x.scId } }, title: 'กำลังลบรหัสเวร', icon: 'bi-trash', done: 'ลบรหัสเวรแล้ว' }).then(scAfter).catch(function () { });
+        });
+      });
+    },
+    onOk: function (close, root) {
+      var item = { scId: ver ? '' : x.scId, code: $('scC').value.trim(), name: $('scN').value.trim(), slot: $('scS').value, start: $('scB').value, end: $('scE').value.trim(), nextDay: $('scX').checked,
+        value: $('scV').value, quota: $('scQ').value, pay: chipValues(root, 'scP')[0] || '', effectiveFrom: $('scF').value || (isNew && !ver ? '' : x.effectiveFrom), ord: $('scO').value, note: $('scT').value, active: $('scA') ? $('scA').checked : true };
+      if (ver && !$('scF').value) { alertBox('ใส่วันที่มีผล', 'ฉบับใหม่ต้องระบุวันที่เริ่มมีผล', 'warning'); return; }
+      if (!item.code) { alertBox('ยังไม่ได้ใส่รหัส', 'กรุณาใส่รหัสเวร', 'warning'); return; }
+      close();
+      act({ action: 'saveShiftCode', payload: { item: item }, title: 'กำลังบันทึกรหัสเวร', text: h(item.code) + ' · ' + h(item.start) + '–' + h(item.end), icon: 'bi-clock-history',
+        steps: ['ตรวจรูปแบบรหัสและเวลา', 'บันทึกลงฐานข้อมูล', 'ปรับการคำนวณทุกหน้าให้ใช้ค่าใหม่'], done: 'บันทึกรหัสเวรเรียบร้อย' }).then(scAfter).catch(function () { });
+    }
+  });
+}
+function scAfter() { scReset(); admReload(); }
 function editPos(p) {
   p = p || { posId: '', name: '', payUnit: 'SHIFT', match: '', active: 'TRUE' };
   modal({
@@ -264,7 +362,8 @@ function editRate(r) {
     title: r.rateId ? 'แก้ไขอัตรา' : 'เพิ่มอัตรา', icon: 'bi-cash-coin', size: 'lg',
     body: '<div class="row g-3"><div class="col-md-5"><label class="form-label">หน่วยงาน</label><select class="form-select" id="rU">' + uopts + '</select></div>' +
       '<div class="col-md-4"><label class="form-label">ตำแหน่ง</label><select class="form-select" id="rP">' + d.positions.map(function (p) { return '<option value="' + p.posId + '"' + (p.posId === r.posId ? ' selected' : '') + '>' + h(p.name) + '</option>'; }).join('') + '</select></div>' +
-      '<div class="col-md-3"><label class="form-label">ช่วงเวร</label><select class="form-select" id="rS">' + [['ช', 'เช้า'], ['บ', 'บ่าย'], ['ด', 'ดึก']].map(function (s) { return '<option value="' + s[0] + '"' + (s[0] === r.slot ? ' selected' : '') + '>' + s[0] + ' · ' + s[1] + '</option>'; }).join('') + '</select></div>' +
+      '<div class="col-md-3"><label class="form-label">ช่วงเวร / รหัสเวร</label><select class="form-select" id="rS"><optgroup label="กลุ่มช่วงเวร">' + [['ช', 'เช้า'], ['บ', 'บ่าย'], ['ด', 'ดึก']].map(function (s) { return '<option value="' + s[0] + '"' + (s[0] === r.slot ? ' selected' : '') + '>' + s[0] + ' · ' + s[1] + '</option>'; }).join('') + '</optgroup><optgroup label="เฉพาะรหัสเวร">' +
+        (d.shiftCodes || []).filter(function (x, i, a) { return ['ช', 'บ', 'ด'].indexOf(x.code) < 0 && a.findIndex(function (y) { return y.code === x.code; }) === i; }).map(function (x) { return '<option value="' + h(x.code) + '"' + (x.code === r.slot ? ' selected' : '') + '>' + h(x.code) + ' · ' + h(x.name) + '</option>'; }).join('') + '</optgroup></select></div>' +
       '<div class="col-md-4"><label class="form-label">รหัสรายได้ HRMi *</label><input class="form-control" id="rC" value="' + h(r.incomeCode) + '" placeholder="เช่น R631-6"></div>' +
       '<div class="col-md-4"><label class="form-label">จำนวนเงินต่อเวร/ชั่วโมง *</label><input class="form-control" id="rA" value="' + h(r.amount) + '" inputmode="decimal"></div>' +
       '<div class="col-md-4"><label class="form-label">มีผลตั้งแต่วันที่</label><input class="form-control" id="rE" type="date" value="' + h(r.effectiveFrom) + '"></div>' +
