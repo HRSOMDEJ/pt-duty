@@ -1,3 +1,5 @@
+/** v2.5.1 เรียงรายชื่อตามรหัสเจ้าหน้าที่ */
+function byEmpCodeJs(a, b) { var x = String(a.empCode || ''), y = String(b.empCode || ''); if (/^\d+$/.test(x) && /^\d+$/.test(y) && x.length !== y.length) return x.length - y.length; return x < y ? -1 : x > y ? 1 : 0; }
 /**
  * pages.js — หน้าใช้งานหลัก (v2): หน้าแรก · เวรของฉัน · ตารางเวร · ตรวจการปฏิบัติงาน · ส่งตรวจ/อนุมัติ · เอกสาร · รายงาน
  */
@@ -358,8 +360,8 @@ function renderGrid(d) {
   html += '<th class="toth">รวม</th></tr></thead><tbody>';
   G.rows.forEach(function (p, ri) {
     var mis = p.regPosId && p.regPosId !== p.posId;
-    html += '<tr data-emp="' + p.empCode + '"><td class="nm"><div class="nm1" title="' + h(p.empName + ' · ' + p.empCode + (p.homeWard ? ' · สังกัด ' + p.homeWard : '')) + '"><b>' + h(p.empName) + '</b>' +
-      '<small>' + h(p.empCode) + (p.homeWard ? ' · <span class="hw">' + h(p.homeWard) + '</span>' : '') + '</small>' +
+    html += '<tr data-emp="' + p.empCode + '"><td class="nm"><div class="nm1" title="' + h(p.empName + ' · ' + p.empCode + (p.homeWard ? ' · สังกัด ' + p.homeWard : '')) + '"><b><span class="cd">' + h(p.empCode) + '</span> ' + h(p.empName) + '</b>' +
+      (p.homeWard ? '<small class="hw2">' + h(p.homeWard) + '</small>' : '') +
       (mis ? '<span class="tag t-orange mis" title="ตำแหน่งในทะเบียน HR ไม่ตรงกับแท็บนี้ — ตรวจสอบก่อนส่งตรวจ">ทะเบียน: ' + h(posName(p.regPosId)) + '</span>' : '') + '</div></td>';
     for (var day = 1; day <= days; day++) {
       var c = p.cells[day], cal = d.calendar[day - 1];
@@ -636,7 +638,7 @@ function schedFromServer(sch) {
     var empty = !Object.keys(e.cells).some(function (k) { return e.cells[k] && e.cells[k].code; });
     if (pend || empty) sch.people.push({ empCode: e.empCode, empName: e.empName, posId: e.posId, regPosId: e.regPosId, cells: {}, shifts: 0, amount: null, homeWard: e.homeWard, homeWardId: e.homeWardId, red: 0, orange: 0 });
   });
-  sch.people.sort(function (a, b) { return a.empName < b.empName ? -1 : a.empName > b.empName ? 1 : 0; });
+  sch.people.sort(byEmpCodeJs);
   (sch.positions || []).forEach(function (p) { p.people = sch.people.filter(function (x) { return x.posId === p.posId; }).length; });
   gridBase(sch);                        // ฐาน = ค่าที่บันทึกแล้วจริงบนเซิร์ฟเวอร์
   Object.keys(keep).forEach(function (k) {   // แล้วค่อยวางช่องที่ยังไม่บันทึกทับ
@@ -705,7 +707,7 @@ function pullPrev() {
         d.people.push({ empCode: e.empCode, empName: e.empName, posId: pos, regPosId: e.posId, cells: {}, shifts: 0, amount: null, homeWard: e.homeWard || '', homeWardId: e.homeWardId || '', red: 0, orange: 0 });
         add++;
       });
-      d.people.sort(function (a, b) { return a.empName < b.empName ? -1 : a.empName > b.empName ? 1 : 0; });
+      d.people.sort(byEmpCodeJs);
       (d.positions || []).forEach(function (p) { if (p.posId === pos) p.people = d.people.filter(function (x) { return x.posId === pos; }).length; });
       paintGrid(false);
       var sk = r.skipped || [];
