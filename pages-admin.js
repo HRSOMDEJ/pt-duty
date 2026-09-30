@@ -24,7 +24,7 @@ PAGES.setup = function () {
     admTab(ADM_TAB);
   }).catch(errToast);
 };
-function admReload() { MEMO = {}; api('bootstrap', {}).then(function (b) { S.boot = b; S.me = b.me; }).catch(function () { }).then(function () { PAGES.setup(); }); }
+function admReload() { api('bootstrap', {}).then(function (b) { S.boot = b; S.me = b.me; pcSet('__boot', { d: b }); scReset && scReset(); }).catch(function () { }).then(function () { PAGES.setup(); }); }
 function admCard(icon, title, sub, btn, body) {
   return '<div class="card-x"><div class="card-h"><h3><i class="bi ' + icon + '"></i> ' + title + '</h3>' + (sub ? '<span class="sub">' + sub + '</span>' : '') + (btn ? '<div class="r">' + btn + '</div>' : '') + '</div>' + body + '</div>';
 }
@@ -52,7 +52,7 @@ function admTab(t) {
     var groups = d.depts.map(function (x) {
       var us = d.units.filter(function (u) { return u.deptId === x.deptId; });
       return admCard('bi-buildings', h(x.name), us.length + ' หน่วยงาน', admin ? '<button class="btn btn-sm btn-brand" onclick="editUnit({deptId:\'' + x.deptId + '\'})"><i class="bi bi-plus-lg"></i> เพิ่มหน่วยงาน</button>' : '',
-        tableBox(['รหัส', 'ชื่อหน่วยงาน', 'ช่วงเวร', 'ระบุหน่วยที่ไปปฏิบัติ', 'ตำแหน่งที่รับ', 'สถานะ', ''], us.map(function (u) {
+        tableBox(['รหัส', 'ชื่อหน่วยงาน', 'ช่วงเวร', 'ระบุหน่วยที่ไปปฏิบัติ', 'ตำแหน่ง (แท็บ)', 'สถานะ', ''], us.map(function (u) {
           return [h(u.unitId), '<b>' + h(u.name) + '</b>' + (u.note ? '<div class="small-muted" style="white-space:normal;max-width:320px">' + h(u.note) + '</div>' : ''),
             String(u.slots || '').split(',').map(shiftBadge).join(' '), u.needWard === 'TRUE' ? '<span class="tag t-acc"><i class="bi bi-geo-alt"></i>ต้องระบุ</span>' : '—',
             u.posIds ? String(u.posIds).split(',').map(function (p) { return '<span class="tag t-open">' + h(p) + '</span>'; }).join(' ') : '<span class="small-muted">ทุกตำแหน่ง</span>',
@@ -137,16 +137,16 @@ function admTab(t) {
       act({ action: 'saveSettings', payload: { items: items }, title: 'กำลังบันทึกกติกาเวรผสม', icon: 'bi-layers', done: 'บันทึกเรียบร้อย' }).then(admReload).catch(function () { });
     });
   } else if (t === 'quotas') {
-    box.innerHTML = admCard('bi-bar-chart-steps', 'กรอบเวร (3 ชั้น)', '', '<button class="btn btn-sm btn-brand" onclick="editQuota()"><i class="bi bi-plus-lg"></i> เพิ่มกรอบ</button>',
-      '<div class="flow-map mb-3">' + [['bi-diagram-3', 'ทั้งฝ่าย', 'เพดานรวมทุกหน่วยงานในฝ่ายต่อวัน'], ['bi-buildings', 'รายหน่วยงาน', 'เพดานของหน่วยงานนั้น'], ['bi-geo-alt', 'ราย ward', 'จำกัดหน่วยปลายทาง (ไม่ตั้ง = ไม่จำกัด)']]
-        .map(function (x) { return '<div class="fm"><b><i class="bi ' + x[0] + ' text-brand"></i> ' + x[1] + '</b><small>' + x[2] + '</small></div>'; }).join('') + '</div>' +
-      noteBox('bad', 'bi-x-octagon', 'เกินกรอบชั้นใดชั้นหนึ่ง = <b>สีแดง</b> ส่งตรวจไม่ได้ · แยกวันทำการ/วันหยุดได้', 'mb-3') +
-      tableBox(['ระดับ', 'ของ', 'ช่วงเวร', 'ประเภทวัน', { t: 'ไม่เกิน (คน/วัน)', n: 1 }, 'มีผลตั้งแต่', ''], d.quotas.map(function (q) {
+    box.innerHTML = quotaGridHtml(d) +
+      '<details class="card-x mt-3"><summary class="fw-600" style="cursor:pointer"><i class="bi bi-list-ul"></i> รายการกรอบทั้งหมด (ขั้นสูง: กรอบราย ward · แยกวันทำการ/วันหยุด · ประวัติวันที่มีผล)</summary><div class="mt-3">' +
+      '<div class="d-flex justify-content-end mb-2"><button class="btn btn-sm btn-ghost" onclick="editQuota()"><i class="bi bi-plus-lg"></i> เพิ่มกรอบแบบละเอียด</button></div>' +
+      tableBox(['ระดับ', 'ของ', 'ตำแหน่ง', 'ช่วงเวร', 'ประเภทวัน', { t: 'ไม่เกิน (คน/วัน)', n: 1 }, 'มีผลตั้งแต่', ''], d.quotas.slice().sort(function (a, b) { return (a.scope + a.refId + (a.posId || '') + a.slot + a.effectiveFrom) < (b.scope + b.refId + (b.posId || '') + b.slot + b.effectiveFrom) ? -1 : 1; }).map(function (q) {
         var scope = { DEPT: 'ทั้งฝ่าย', UNIT: 'รายหน่วยงาน', WARD: 'ราย ward' }[q.scope] || q.scope;
         var ref = q.scope === 'UNIT' ? h(admUnitName(q.refId)) : q.scope === 'WARD' ? h(wardName(q.refId)) : (q.refId === '*' ? 'ทุกฝ่าย (รุ่นเก่า)' : admDeptChip(q.refId));
-        return ['<span class="tag t-open">' + h(scope) + '</span>', ref, shiftBadge(q.slot), h({ ALL: 'ทุกวัน', WORKDAY: 'วันทำการ', HOLIDAY: 'วันหยุด' }[q.dayType] || q.dayType),
-          '<b>' + num(q.lim) + '</b>', h(thaiDate(q.effectiveFrom)), editBtn('editQuota', q)];
-      }), { maxh: '56vh' }));
+        return ['<span class="tag t-open">' + h(scope) + '</span>', ref, q.posId ? '<span class="tag t-info">' + h(posName(q.posId)) + '</span>' : '<span class="small-muted">รวมทุกตำแหน่ง</span>', shiftBadge(q.slot), h({ ALL: 'ทุกวัน', WORKDAY: 'วันทำการ', HOLIDAY: 'วันหยุด' }[q.dayType] || q.dayType),
+          q.lim === '' ? '<span class="small-muted">ไม่จำกัด</span>' : '<b>' + num(q.lim) + '</b>', h(thaiDate(q.effectiveFrom)), editBtn('editQuota', q)];
+      }), { maxh: '56vh' }) + '</div></details>';
+    wireQuotaGrid(d);
   } else if (t === 'cal') {
     box.innerHTML = admCard('bi-calendar-heart', 'ปฏิทินวันหยุด', 'แสดงตั้งแต่ 6 เดือนก่อน', '<button class="btn btn-sm btn-brand" onclick="editCal()"><i class="bi bi-plus-lg"></i> เพิ่มวัน</button>',
       noteBox('info', 'bi-info-circle', 'วันหยุดไม่มีผลกับค่าตอบแทน ใช้แสดงสีในตาราง/เอกสาร และใช้กับกรอบเวรที่แยกวันทำการ/วันหยุด', 'mb-3') +
@@ -228,9 +228,9 @@ function editUnit(u) {
     body: '<div class="row g-3"><div class="col-md-7"><label class="form-label">ชื่อหน่วยงาน *</label><input class="form-control" id="uN" value="' + h(u.name) + '"></div>' +
       '<div class="col-md-5"><label class="form-label">สังกัดฝ่าย *</label><select class="form-select" id="uD">' + d.depts.map(function (x) { return '<option value="' + x.deptId + '"' + (x.deptId === u.deptId ? ' selected' : '') + '>' + h(x.name) + '</option>'; }).join('') + '</select></div>' +
       '<div class="col-12"><label class="form-label">ช่วงเวรที่ลงได้</label>' + chipGroup('slots', [{ v: 'ช', t: 'เช้า', d: '08–16' }, { v: 'บ', t: 'บ่าย', d: '16–24' }, { v: 'ด', t: 'ดึก', d: '24–08' }], String(u.slots).split(',')) + '</div>' +
-      '<div class="col-12"><label class="form-label">ตำแหน่งที่หน่วยงานนี้รับ (ไม่เลือก = ทุกตำแหน่ง)</label>' +
+      '<div class="col-12"><label class="form-label">ตำแหน่งที่เปิดตาราง <span class="small-muted fw-normal">(1 ตำแหน่ง = 1 แท็บในหน้าตารางเวร · ไม่เลือก = ทุกตำแหน่ง)</span></label>' +
       chipGroup('pos', d.positions.map(function (p) { return { v: p.posId, t: p.name, d: p.payUnit === 'HOUR' ? 'ชม.' : '' }; }), String(u.posIds || '').split(',').filter(Boolean)) +
-      '<div class="form-text">บุคลากรลงเวรเองได้เฉพาะหน่วยงานที่รับตำแหน่งของตน</div></div>' +
+      '<div class="form-text">กรอบเวรแยกตามตำแหน่ง ตั้งได้ที่แท็บ “กรอบเวร” · บุคลากรลงเวรเองได้เฉพาะหน่วยงานที่เปิดตำแหน่งของตน</div></div>' +
       '<div class="col-12"><div class="form-check form-switch"><input class="form-check-input" type="checkbox" id="uW"' + (u.needWard === 'TRUE' ? ' checked' : '') + '><label class="form-check-label" for="uW">ต้องระบุ <b>หน่วยที่ไปปฏิบัติ</b> (ward ปลายทาง) ทุกวัน — เช่น IPD&amp;OPD</label></div>' +
       '<div class="form-check form-switch mt-2"><input class="form-check-input" type="checkbox" id="uA"' + (u.active !== 'FALSE' ? ' checked' : '') + '><label class="form-check-label" for="uA">เปิดใช้งาน</label></div></div>' +
       '<div class="col-12"><label class="form-label">หมายเหตุ</label><input class="form-control" id="uNo" value="' + h(u.note || '') + '"></div></div>' +
@@ -381,7 +381,7 @@ function editRate(r) {
 }
 function editQuota(q) {
   var d = window.ADM;
-  q = q || { quotaId: '', scope: 'UNIT', refId: '', slot: 'ช', dayType: 'ALL', lim: '', effectiveFrom: '' };
+  q = q || { quotaId: '', scope: 'UNIT', refId: '', posId: 'RN', slot: 'ช', dayType: 'ALL', lim: '', effectiveFrom: '' };
   var refOpts = function (scope) {
     if (scope === 'DEPT') return d.depts.map(function (x) { return '<option value="' + x.deptId + '"' + (x.deptId === q.refId ? ' selected' : '') + '>' + h(x.name) + '</option>'; }).join('');
     if (scope === 'UNIT') return d.units.map(function (u) { return '<option value="' + u.unitId + '"' + (u.unitId === q.refId ? ' selected' : '') + '>' + h(u.name) + ' · ' + h(admDeptName(u.deptId)) + '</option>'; }).join('');
@@ -391,20 +391,99 @@ function editQuota(q) {
     title: q.quotaId ? 'แก้ไขกรอบเวร' : 'เพิ่มกรอบเวร', icon: 'bi-bar-chart-steps',
     body: '<label class="form-label">ระดับ</label>' + chipGroup('scope', [{ v: 'DEPT', t: 'ทั้งฝ่าย' }, { v: 'UNIT', t: 'รายหน่วยงาน' }, { v: 'WARD', t: 'ราย ward' }], [q.scope], { single: true }) +
       '<label class="form-label mt-3">ของ</label><select class="form-select mb-3" id="qR">' + refOpts(q.scope) + '</select>' +
+      '<label class="form-label">ตำแหน่ง</label><select class="form-select mb-3" id="qP"><option value="">รวมทุกตำแหน่ง (รุ่นเดิม)</option>' + d.positions.map(function (p) { return '<option value="' + h(p.posId) + '"' + (p.posId === (q.posId || '') ? ' selected' : '') + '>' + h(p.name) + '</option>'; }).join('') + '</select>' +
       '<div class="row g-2"><div class="col-4"><label class="form-label">ช่วงเวร</label><select class="form-select" id="qL">' + ['ช', 'บ', 'ด'].map(function (s) { return '<option' + (s === q.slot ? ' selected' : '') + '>' + s + '</option>'; }).join('') + '</select></div>' +
       '<div class="col-4"><label class="form-label">ประเภทวัน</label><select class="form-select" id="qD">' + [['ALL', 'ทุกวัน'], ['WORKDAY', 'วันทำการ'], ['HOLIDAY', 'วันหยุด']].map(function (x) { return '<option value="' + x[0] + '"' + (q.dayType === x[0] ? ' selected' : '') + '>' + x[1] + '</option>'; }).join('') + '</select></div>' +
-      '<div class="col-4"><label class="form-label">ไม่เกิน (คน/วัน)</label><input class="form-control" id="qN" value="' + h(q.lim) + '" inputmode="decimal"></div></div>' +
+      '<div class="col-4"><label class="form-label">ไม่เกิน (คน/วัน)</label><input class="form-control" id="qN" value="' + h(q.lim) + '" inputmode="decimal" placeholder="ว่าง = ไม่จำกัด"></div></div>' +
       '<label class="form-label mt-3">มีผลตั้งแต่</label><input class="form-control" id="qE" type="date" value="' + h(q.effectiveFrom) + '">',
     okText: 'บันทึก', okIcon: 'bi-save',
     onOpen: function (root) { wireChips(root, function (n, v) { if (n === 'scope') { q.scope = v[0] || 'UNIT'; $('qR').innerHTML = refOpts(q.scope); } }); },
     onOk: function (close, root) {
-      var item = { quotaId: q.quotaId, scope: chipValues(root, 'scope')[0] || 'UNIT', refId: $('qR').value, slot: $('qL').value, dayType: $('qD').value, lim: $('qN').value, effectiveFrom: $('qE').value };
-      if (item.lim === '' || isNaN(+item.lim)) { alertBox('ตัวเลขไม่ถูกต้อง', 'กรุณาใส่จำนวนคนสูงสุดต่อวัน', 'warning'); return; }
+      var item = { quotaId: q.quotaId, scope: chipValues(root, 'scope')[0] || 'UNIT', refId: $('qR').value, posId: $('qP').value, slot: $('qL').value, dayType: $('qD').value, lim: $('qN').value.trim(), effectiveFrom: $('qE').value };
+      if (item.lim !== '' && isNaN(+item.lim)) { alertBox('ตัวเลขไม่ถูกต้อง', 'กรุณาใส่จำนวนคนสูงสุดต่อวัน (เว้นว่าง = ไม่จำกัด)', 'warning'); return; }
+      if (q.quotaId && (item.posId !== (q.posId || '') || item.scope !== q.scope || item.refId !== q.refId || item.slot !== q.slot || item.dayType !== q.dayType || item.effectiveFrom !== q.effectiveFrom)) item.quotaId = '';
       close();
       act({ action: 'saveQuota', payload: { item: item }, title: 'กำลังบันทึกกรอบเวร', icon: 'bi-bar-chart-steps', done: 'บันทึกกรอบเวรเรียบร้อย', quiet: true }).then(admReload).catch(function () { });
     }
   });
 }
+/* ---------------------------------------------------------------- v2.5 กรอบเวรแบบตาราง (ฝ่าย / หน่วยงาน × ตำแหน่ง × ช่วงเวร) */
+function qEffective(d, scope, refId, posId, slot, asOf) {
+  var best = null;
+  (d.quotas || []).forEach(function (q) {
+    if (q.scope !== scope || q.refId !== refId || (q.posId || '') !== (posId || '') || q.slot !== slot || q.dayType !== 'ALL') return;
+    if (q.effectiveFrom && q.effectiveFrom > asOf) return;
+    if (!best || (q.effectiveFrom || '') >= (best.effectiveFrom || '')) best = q;
+  });
+  return best;
+}
+function quotaGridHtml(d) {
+  var asOf = (S.ym || thisYmJs()) + '-01', admin = d.isAdmin;
+  var posOfDept = function (deptId) {
+    var ids = [];
+    d.units.filter(function (u) { return u.deptId === deptId && u.active !== 'FALSE'; }).forEach(function (u) {
+      (String(u.posIds || '').split(',').filter(Boolean).length ? String(u.posIds).split(',') : d.positions.filter(function (p) { return p.active !== 'FALSE'; }).map(function (p) { return p.posId; }))
+        .forEach(function (p) { p = p.trim(); if (p && ids.indexOf(p) < 0) ids.push(p); });
+    });
+    return ids;
+  };
+  var cell = function (scope, refId, posId, slot, enabled) {
+    if (!enabled) return '<td class="qg-na">—</td>';
+    var q = qEffective(d, scope, refId, posId, slot, asOf), gen = !q ? qEffective(d, scope, refId, '', slot, asOf) : null;
+    var v = q ? q.lim : '';
+    return '<td><input class="form-control form-control-sm qg-in" inputmode="decimal" data-s="' + scope + '" data-r="' + h(refId) + '" data-p="' + h(posId) + '" data-l="' + slot + '" data-o="' + h(v) + '" value="' + h(v) + '" placeholder="' + (gen && gen.lim !== '' ? 'รวม ' + h(gen.lim) : 'ไม่จำกัด') + '"' + (q && q.effectiveFrom ? ' title="มีผลตั้งแต่ ' + h(thaiDate(q.effectiveFrom)) + '"' : '') + '></td>';
+  };
+  var SL = [['ช', 'เช้า'], ['บ', 'บ่าย'], ['ด', 'ดึก']];
+  var html = '<div class="card-x"><div class="card-h"><h3><i class="bi bi-bar-chart-steps"></i> กรอบเวรแยกตามตำแหน่ง</h3><span class="sub">จำนวนคนสูงสุดต่อวัน (ครึ่งเวร = 0.5)</span>' +
+    '<div class="r d-flex gap-2 align-items-center flex-wrap"><label class="small-muted m-0" for="qgDate">มีผลตั้งแต่</label><input type="date" class="form-control form-control-sm" id="qgDate" value="' + asOf + '" style="width:160px">' +
+    '<button class="btn btn-sm btn-brand" id="qgSave" disabled><i class="bi bi-save"></i> บันทึกกรอบ</button></div></div>' +
+    noteBox('info', 'bi-info-circle', '<b>ทั้งฝ่าย</b> = เพดานรวมทุกหน่วยงานของฝ่ายต่อวัน · <b>รายหน่วยงาน</b> = เพดานของหน่วยนั้น · นับแยกตำแหน่ง (เช่น กรอบ RN ไม่รวม PN/NA) · ' +
+      'เกินกรอบ = <b>สีแดง</b> ส่งตรวจไม่ได้ · <b>เว้นว่าง = ไม่จำกัด</b> · ตัวเลขที่แสดงคือกรอบที่มีผล ณ ' + h(thaiDate(asOf)) + ' (เดือนที่เลือกด้านบน) · บันทึกแล้วมีผลตั้งแต่วันที่ที่เลือก เดือนก่อนหน้ายังใช้กรอบเดิม', 'mb-3');
+  d.depts.filter(function (x) { return x.active !== 'FALSE'; }).forEach(function (x) {
+    var pos = posOfDept(x.deptId);
+    if (!pos.length) return;
+    var units = d.units.filter(function (u) { return u.deptId === x.deptId && u.active !== 'FALSE'; });
+    html += '<div class="qg-dept" style="--dc:' + h(x.color || '#0e9f8f') + '"><h4>' + admDeptChip(x.deptId) + '</h4><div class="tbox"><table class="tb qg"><thead><tr><th>ระดับ / หน่วยงาน</th><th>ตำแหน่ง</th>' +
+      SL.map(function (s) { return '<th class="c">' + shiftBadge(s[0]) + ' ' + s[1] + '</th>'; }).join('') + '</tr></thead><tbody>';
+    pos.forEach(function (pid, i) {
+      html += '<tr class="qg-deptrow' + (i === 0 ? ' first' : '') + '">' + (i === 0 ? '<td rowspan="' + pos.length + '"><b>ทั้งฝ่าย</b><div class="small-muted">รวมทุกหน่วยงาน</div></td>' : '') +
+        '<td><span class="tag t-info">' + h(posName(pid)) + '</span></td>' + SL.map(function (s) { return cell('DEPT', x.deptId, pid, s[0], true); }).join('') + '</tr>';
+    });
+    units.forEach(function (u) {
+      var up = String(u.posIds || '').split(',').filter(Boolean); if (!up.length) up = pos;
+      var sl = String(u.slots || '').split(',');
+      up.forEach(function (pid, i) {
+        html += '<tr' + (i === 0 ? ' class="first"' : '') + '>' + (i === 0 ? '<td rowspan="' + up.length + '"><b>' + h(u.name) + '</b>' + (u.needWard === 'TRUE' ? '<div class="small-muted"><i class="bi bi-geo-alt"></i> ระบุหน่วยปลายทาง</div>' : '') + '</td>' : '') +
+          '<td><span class="tag t-open">' + h(posName(pid)) + '</span></td>' + SL.map(function (s) { return cell('UNIT', u.unitId, pid, s[0], sl.indexOf(s[0]) >= 0); }).join('') + '</tr>';
+      });
+    });
+    html += '</tbody></table></div></div>';
+  });
+  return html + '</div>';
+}
+function wireQuotaGrid(d) {
+  var btn = $('qgSave'); if (!btn) return;
+  var changed = function () {
+    return $$('.qg-in').filter(function (i) { return i.value.trim() !== i.dataset.o; });
+  };
+  $$('.qg-in').forEach(function (i) {
+    i.addEventListener('input', function () {
+      var v = i.value.trim(); i.classList.toggle('is-invalid', v !== '' && (isNaN(+v) || +v < 0)); i.classList.toggle('chg', v !== i.dataset.o);
+      var n = changed().length; btn.disabled = !n; btn.innerHTML = '<i class="bi bi-save"></i> บันทึกกรอบ' + (n ? ' (' + n + ')' : '');
+    });
+  });
+  btn.addEventListener('click', function () {
+    var list = changed();
+    if (list.some(function (i) { return i.classList.contains('is-invalid'); })) { alertBox('ตัวเลขไม่ถูกต้อง', 'ใส่ตัวเลขตั้งแต่ 0 ขึ้นไป หรือเว้นว่าง (= ไม่จำกัด)', 'warning'); return; }
+    var ef = $('qgDate').value;
+    if (!ef) { alertBox('ยังไม่ได้ระบุวันที่มีผล', 'กรุณาเลือกวันที่ที่กรอบใหม่เริ่มมีผล', 'warning'); return; }
+    var items = list.map(function (i) { return { scope: i.dataset.s, refId: i.dataset.r, posId: i.dataset.p, slot: i.dataset.l, lim: i.value.trim() }; });
+    act({ action: 'saveQuotaGrid', payload: { effectiveFrom: ef, items: items }, title: 'กำลังบันทึกกรอบเวร', text: items.length + ' ช่อง · มีผลตั้งแต่ ' + thaiDate(ef), icon: 'bi-bar-chart-steps',
+      done: function (r) { return { title: 'บันทึกกรอบเวรเรียบร้อย', html: 'บันทึก ' + r.saved + ' รายการ' + (r.removed ? ' · ลบ ' + r.removed : '') + (r.warnings && r.warnings.length ? '<div class="res-list mt-2">' + r.warnings.map(function (w) { return '<div class="warn">' + h(w) + '</div>'; }).join('') + '</div>' : ''), timer: r.warnings && r.warnings.length ? undefined : 1600 }; } })
+      .then(admReload).catch(function () { });
+  });
+}
+
 function editCal(c) {
   var isNew = !c;
   c = c || { date: '', dayType: 'PUBHOL', name: '' };

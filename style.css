@@ -773,3 +773,92 @@ body.pr-open{overflow:hidden}
 }
 .lg-aurora{animation:none!important}
 @media (max-width:900px),(hover:none){.lg-aurora{display:none}}
+
+/* ===== v2.5 (1 ต.ค. 69) ตารางเวรแยกตำแหน่ง · แถวกรอบคงเหลือ · อ่านง่ายขึ้น · เว้นขอบจอ ===== */
+.content{padding:26px 30px 30px}
+@media (max-width:991px){.content{padding:16px 14px}}
+/* แก้หัวคอลัมน์ชื่อไม่ตรึงเวลาเลื่อนซ้าย-ขวา (ช่องวันที่ทับหัวชื่อ) */
+table.sched thead th.nmh{z-index:8;left:0;min-width:236px;max-width:236px}
+table.sched thead th.nmh small{display:inline;font-size:.72rem;margin-left:4px}
+table.sched thead th.toth{position:sticky;right:0;z-index:7;min-width:92px;background:var(--surface-2);border-left:1px solid var(--line)}
+th.nmh,td.nm{min-width:236px;max-width:236px}
+table.sched td.nm{padding:.3rem .7rem;vertical-align:middle}
+td.nm .nm1{display:flex;flex-direction:column;min-width:0;line-height:1.2}
+td.nm .nm1 b{font-size:.9rem;font-weight:700;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+td.nm .nm1 small{font-size:.74rem;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+td.nm .nm1 .mis{align-self:flex-start;margin-top:2px;font-size:.66rem;padding:.05rem .4rem}
+/* ช่องเวร: ตัวใหญ่ เข้ม อ่านง่าย */
+td.cell{width:54px;min-width:54px;height:52px}
+td.cell input{height:30px;font-size:1.02rem;font-weight:800;color:var(--ink);letter-spacing:.01em}
+td.cell input[readonly]{cursor:pointer}
+td.cell .wt{font-size:.7rem;color:var(--ink-2);height:20px;line-height:20px}
+td.cell .wt.set{color:var(--accent);font-weight:700}
+td.cell .att{position:absolute;right:2px;bottom:1px;font-size:.62rem;color:var(--accent);cursor:pointer}
+td.cell.sending::before{content:"";position:absolute;left:3px;top:3px;width:7px;height:7px;border-radius:50%;border:2px solid var(--accent);border-right-color:transparent;animation:spin .8s linear infinite}
+td.tot{min-width:92px;padding:.3rem .55rem;line-height:1.15}
+td.tot b{font-size:1.02rem}
+td.tot span{font-size:.7rem;color:var(--muted);margin-left:3px}
+td.tot em{display:block;font-style:normal;font-size:.74rem;color:var(--ink-2)}
+td.emptyrow{padding:10px}
+/* แท็บตำแหน่ง */
+.ptabs{display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin:0 0 10px}
+.ptabs button{display:inline-flex;align-items:center;gap:6px;border:1.5px solid var(--line);background:var(--surface);color:var(--ink-2);border-radius:12px;padding:.45rem .9rem;font-weight:700;font-size:.92rem;font-family:var(--font-d);cursor:pointer;transition:border-color .15s,background .15s,color .15s}
+.ptabs button:hover{border-color:var(--brand)}
+.ptabs button.on{background:var(--brand);border-color:var(--brand);color:#fff;box-shadow:0 6px 16px -8px rgba(var(--brand-rgb),.8)}
+.ptabs .cnt{font-size:.72rem;font-weight:600;padding:.05rem .45rem;border-radius:99px;background:var(--surface-2);color:var(--ink-2)}
+.ptabs button.on .cnt{background:rgba(255,255,255,.22);color:#fff}
+.ptabs .cnt.bad{background:var(--bad);color:#fff}
+.ptabs .cnt.dirty{background:var(--accent);color:#fff}
+.ptabs .pt-hint{margin-left:auto;font-size:.76rem}
+@media (max-width:767px){.ptabs{flex-wrap:nowrap;overflow-x:auto;padding-bottom:4px;-webkit-overflow-scrolling:touch}.ptabs button{flex:none}.ptabs .pt-hint{display:none}}
+/* แถวกรอบเวร (คงเหลือ) ใต้ตาราง */
+table.sched tfoot tr.qrow td{position:sticky;height:34px;padding:0 1px;background:var(--surface-2);z-index:3;border-top:0;line-height:1}
+table.sched tfoot tr.qrow.qu:first-child td{border-top:2px solid var(--line)}
+table.sched tfoot tr.qrow.qu td{border-top:1.5px solid var(--line)}
+table.sched tfoot tr.qrow td.lb{left:0;z-index:5;text-align:left;padding:0 .7rem;font-size:.76rem;font-weight:700;white-space:nowrap;color:var(--ink-2);min-width:236px;max-width:236px;overflow:hidden;text-overflow:ellipsis}
+table.sched tfoot tr.qrow.qd td.lb{font-weight:600;color:var(--muted)}
+table.sched tfoot tr.qrow td.lb .qsp{display:inline-block;width:26px}
+table.sched tfoot tr.qrow td.tot{right:0;z-index:4}
+table.sched tfoot td.q{text-align:center;font-variant-numeric:tabular-nums}
+table.sched tfoot td.q b{display:block;font-size:.98rem;font-weight:800;font-family:var(--font-d);line-height:1.05}
+table.sched tfoot td.q small{display:block;font-size:.6rem;color:var(--muted);margin-top:1px;white-space:nowrap}
+table.sched tfoot td.q.ok b{color:var(--ok)}
+table.sched tfoot td.q.full{background:var(--warn-50)} table.sched tfoot td.q.full b{color:var(--warn)}
+table.sched tfoot td.q.hot{background:var(--bad-50)} table.sched tfoot td.q.hot b{color:var(--bad)}
+table.sched tfoot td.q.nolim b{color:var(--muted);font-weight:600}
+table.sched tfoot td.q.chg{box-shadow:inset 0 -3px 0 var(--accent)}
+.legend .ql{display:inline-block;min-width:22px;text-align:center;font-weight:800;border-radius:6px;padding:0 4px}
+.legend .ql.ok{color:var(--ok)} .legend .ql.full{color:var(--warn);background:var(--warn-50)} .legend .ql.hot{color:var(--bad);background:var(--bad-50)}
+/* กรอบคงเหลือในป๊อปเลือกเวร / ลงเวรเอง */
+.qhint{display:flex;flex-wrap:wrap;align-items:center;gap:4px;margin:-2px 0 8px;font-size:.8rem}
+.qh{display:inline-block;font-weight:700;font-size:.74rem;padding:.05rem .4rem;border-radius:6px;background:var(--surface-2)}
+.qh.ok{color:var(--ok)} .qh.full{color:var(--warn);background:var(--warn-50)} .qh.hot{color:var(--bad);background:var(--bad-50)} .qh.nolim{color:var(--muted)}
+.sb-days{display:grid;grid-template-columns:repeat(7,1fr);gap:6px;text-align:center}
+.sb-day{flex-direction:column;gap:0;min-height:60px;padding:.25rem!important;display:flex;align-items:center;justify-content:flex-start}
+.sb-day small{font-size:.72rem;line-height:1.2}
+.sb-q{display:flex;gap:2px;justify-content:center;flex-wrap:wrap;margin-top:2px}
+.sb-q .qh{font-size:.6rem;padding:0 .25rem}
+.saving{animation:none}
+.att-row{display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px dashed var(--line)}
+.att-row:last-child{border-bottom:0}
+@media (max-width:575.98px){
+  th.nmh,td.nm,table.sched thead th.nmh,table.sched tfoot tr.qrow td.lb{min-width:150px;max-width:150px}
+  td.nm .nm1 small{display:none}
+  td.cell{width:48px;min-width:48px}
+  td.tot{position:static;min-width:64px}
+  table.sched thead th.toth{position:static}
+  table.sched tfoot tr.qrow td.tot{position:static}
+  .schedwrap{max-height:calc(100vh - 230px)}
+}
+:root[data-theme="dark"] td.cell input{color:var(--ink)}
+/* v2.5 กรอบเวรแบบตาราง (หน้าตั้งค่า) */
+.qg-dept{margin-top:14px}
+.qg-dept h4{font-size:1rem;margin:0 0 8px}
+table.tb.qg td,table.tb.qg th{vertical-align:middle}
+table.tb.qg th.c{text-align:center}
+table.tb.qg tr.first td{border-top:2px solid var(--line)}
+table.tb.qg tr.qg-deptrow td{background:color-mix(in srgb,var(--dc,#0e9f8f) 7%,var(--surface))}
+.qg-in{width:92px;margin:0 auto;text-align:center;font-weight:700;font-variant-numeric:tabular-nums}
+.qg-in.chg{border-color:var(--accent);box-shadow:0 0 0 3px rgba(var(--accent-rgb),.15)}
+.qg-na{text-align:center;color:var(--muted)}
+@media (max-width:575.98px){.gbar #gSave{position:fixed;right:14px;bottom:16px;z-index:1030;box-shadow:0 10px 24px -8px rgba(0,0,0,.45);padding:.6rem 1rem}}

@@ -6,104 +6,68 @@
  *  4) ป๊อปอัปพิมพ์เอกสาร (เลือก "บันทึกเป็น PDF" ได้จากหน้าพิมพ์)
  */
 
-/* ================================================================ 1) โหลดครั้งเดียว */
+/* ================================================================ 1) โหลดล่วงหน้าแบบเบื้องหลัง (v2.5) */
+/*
+ * รุ่น 2.4 โหลดทุกหน้าของทุกหน่วยรวดเดียวตอนเข้าระบบ (2 คำขอใหญ่) และทุกหน้าต้องรอชุดนั้น → รอ 15–35 วิ / ค้าง
+ * รุ่น 2.5: เข้าระบบโหลดเฉพาะหน้าแรก · หน้าอื่นโหลดเบื้องหลังทีละชุดเล็ก (≤3 รายการ) เฉพาะตอนผู้ใช้ไม่ได้รอคำขออื่น
+ *           ผู้ใช้กดเมนูเมื่อไร คำขอของผู้ใช้ได้ไปก่อนเสมอ ไม่ต้องรอชุดเบื้องหลัง · ข้อมูลที่เลขรุ่นยังตรงไม่โหลดซ้ำ
+ */
 var FAST_BASE = ((document.currentScript && document.currentScript.src) || '').replace(/fast\.js[^/]*$/, '');
-var PRE = { wait: {}, run: 0, ym: '', done: 0, total: 0, timer: null };
-var MEMO_TTL = 10 * 60 * 1000;          // ข้อมูลที่โหลดไว้ใช้ได้ 10 นาที (หลังจากนั้นหน้าที่เปิดจะโหลดใหม่เฉพาะหน้านั้น)
+var PRE = { run: 0, ym: '', timer: null };
 
 function preloadPlan(ym) {
-  var me = S.me || {}, a = [], b = [];
-  var add = function (list, action, payload) {
-    var k = mkey(action, payload);
-    if (MEMO[k] && Date.now() - MEMO_T[k] < MEMO_TTL) return;
+  var me = S.me || {}, list = [];
+  var add = function (action, payload) {
+    var e = cacheGet(mkey(action, payload));
+    if (e && entryValid(e)) return;
     list.push({ action: action, payload: payload });
   };
-  add(a, 'getDashboard', { ym: ym });
-  add(a, 'getMySchedule', { ym: ym });
   var mgr = myUnitsFor('manage'), sched = typeof schedUnits === 'function' ? schedUnits() : mgr;
-  if (!mgr.length) sched = sched.slice(0, 1);   // บุคลากรทั่วไป โหลดเฉพาะตารางหน่วยแรก
-  if (mgr.length) { add(a, 'getPeriods', { ym: ym, deptId: S.deptId || '' }); add(a, 'listEmployeesLite', {}); }
   var first = pickUnit(sched);
-  if (first) add(a, 'getSchedule', { ym: ym, unitId: first });
-  sched.forEach(function (u) { if (u.unitId !== first) add(a.length < 12 ? a : b, 'getSchedule', { ym: ym, unitId: u.unitId }); });
-  mgr.forEach(function (u) { add(b, 'getWorkSheet', { ym: ym, unitId: u.unitId }); });
+  // ลำดับ = หน้าที่ผู้ใช้น่าจะเปิดก่อน
+  if (first) add('getSchedule', { ym: ym, unitId: first });
+  add('getMySchedule', { ym: ym });
   if (mgr.length) {
-    add(b, 'getReport', { ym: ym, unitId: S.repUnit || '', onlyProblems: true });
-    var wdef = S.repUnit || (mgr.filter(function (u) { return u.needWard; })[0] || {}).unitId || '';
-    add(b, 'getWardReport', { ym: ym, unitId: wdef });
+    add('getPeriods', { ym: ym, deptId: S.deptId || '' });
+    add('listEmployeesLite', {});
+    var w1 = pickUnit(mgr); if (w1) add('getWorkSheet', { ym: ym, unitId: w1 });
   }
-  if (me.isAdmin || me.isChief) add(b, 'getAdminData', { ym: ym });
-  if (me.canManageUsers) add(b, 'listUsers', {});
-  return [a, b].filter(function (x) { return x.length; });
+  if (mgr.length && mgr.length <= 12) sched.forEach(function (u) { if (u.unitId !== first) add('getSchedule', { ym: ym, unitId: u.unitId }); });
+  return list;
 }
 
-/** เริ่มโหลดล่วงหน้า — หน้าไหนที่เปิดระหว่างรอ จะรอผลชุดนี้แทนการยิงคำขอซ้ำ */
-function startPreload(ym, quiet, light) {
+/** โหลดล่วงหน้าเบื้องหลัง — ชุดละ ≤3 รายการ ทีละชุด (ช่องทางแยกจากคำขอของผู้ใช้ ไม่ขวางกัน) · หน้าที่เปิดระหว่างนั้นรอชุดที่มีหน้านั้นอยู่ */
+function startPreload(ym) {
   if (!S.me || !S.token) return Promise.resolve();
   ym = ym || S.ym || thisYmJs();
-  var batches = preloadPlan(ym), run = ++PRE.run;
-  if (light) batches = batches.slice(0, 1);   // หลังบันทึก: โหลดใหม่เฉพาะชุดหลัก (เบาเครื่องแม่ข่าย)
-  if (!batches.length) return Promise.resolve();
-  PRE.ym = ym; PRE.done = 0; PRE.total = batches.reduce(function (n, x) { return n + x.length; }, 0);
-  preBadge(quiet ? null : 'load');
-  var chain = Promise.resolve();
-  batches.forEach(function (items) {
-    var release;
-    var gate = new Promise(function (r) { release = r; });
-    items.forEach(function (it) { PRE.wait[mkey(it.action, it.payload)] = gate; });
+  var run = ++PRE.run, items = preloadPlan(ym), chunks = [];
+  for (var i = 0; i < items.length; i += 3) chunks.push(items.slice(i, i + 3));
+  PRE.ym = ym;
+  var chain = new Promise(function (r) { setTimeout(r, 300); });
+  chunks.forEach(function (ch) {
     chain = chain.then(function () {
-      if (run !== PRE.run) { release(); return; }
-      return rawCall('preload', { items: items }).then(function (res) {
+      if (run !== PRE.run || !S.token) return;
+      var todo = ch.filter(function (it) { var k = mkey(it.action, it.payload), e = cacheGet(k); return !(e && entryValid(e)) && !INFLIGHT[k]; });
+      if (!todo.length) return;
+      var p = rawCall('preload', { items: todo }, true).then(function (res) {
         if (res && res.ok) {
-          res.data.items.forEach(function (x) {
-            if (x.data === undefined) return;
-            var k = mkey(x.action, x.payload);
-            MEMO[k] = x.data; MEMO_T[k] = Date.now();
-            if (x.action !== 'listEmployeesLite') pcSet(k, x.data);
-          });
+          dvSeen(res.dv);
+          res.data.items.forEach(function (x) { if (x.data !== undefined) cachePut(x.action, x.payload, x.data, res.dv); });
         } else if (res && res.error === 'SESSION_EXPIRED') { signedOut(true); }
-        PRE.done += items.length;
-        if (run === PRE.run && !quiet) preBadge('load');
-      }).catch(function () { }).then(function () {
-        items.forEach(function (it) { var k = mkey(it.action, it.payload); if (PRE.wait[k] === gate) delete PRE.wait[k]; });
-        release();
-      });
+      }).catch(function () { });
+      var done = p.then(function () { todo.forEach(function (it) { var k = mkey(it.action, it.payload); if (BGWAIT[k] === done) delete BGWAIT[k]; }); });
+      todo.forEach(function (it) { BGWAIT[mkey(it.action, it.payload)] = done; });
+      return done;
     });
   });
-  return chain.then(function () { if (run === PRE.run && !quiet) preBadge('ok'); });
+  return chain;
 }
-
-/** หลังบันทึก — โหลดข้อมูลล่วงหน้าใหม่แบบเงียบ ๆ (รวบหลายการบันทึกติดกันเป็นครั้งเดียว) */
-function schedulePreload() {
-  clearTimeout(PRE.timer);
-  PRE.timer = setTimeout(function () { startPreload(S.ym || thisYmJs(), true, true); }, 6000);
-}
-
-function preBadge(state) {
-  var el = $('preBadge');
-  if (!el) {
-    el = document.createElement('div'); el.id = 'preBadge'; el.className = 'pre-badge';
-    document.body.appendChild(el);
-  }
-  if (!state) { el.className = 'pre-badge'; return; }
-  if (state === 'ok') {
-    el.className = 'pre-badge show ok';
-    el.innerHTML = '<i class="bi bi-check-circle"></i> ข้อมูลพร้อมแล้ว — สลับหน้าได้ทันที';
-    setTimeout(function () { el.className = 'pre-badge'; }, 2500);
-    return;
-  }
-  var pct = PRE.total ? Math.round(PRE.done / PRE.total * 100) : 0;
-  el.className = 'pre-badge show';
-  el.innerHTML = '<span class="spin"></span> กำลังเตรียมข้อมูลทุกหน้า (ครั้งเดียว) ' + pct + '%';
-}
+/** รุ่นเดิมเรียกหลังบันทึก — รุ่นนี้ไม่ต้องทำอะไร (เลขรุ่นข้อมูลบอกเองว่าอะไรต้องโหลดใหม่) */
+function schedulePreload() { }
+function preBadge() { }
 
 /* ================================================================ 2) ค้นชื่อในเครื่อง */
-function empLite() {
-  var k = mkey('listEmployeesLite', {});
-  if (MEMO[k]) return Promise.resolve(MEMO[k]);
-  if (PRE.wait[k]) return PRE.wait[k].then(function () { return MEMO[k] || api('listEmployeesLite', {}, { fresh: true }); });
-  return api('listEmployeesLite', {}, { fresh: true });
-}
+function empLite() { return api('listEmployeesLite', {}, { fresh: true, keep: true }); }
 function normTh(s) { return String(s || '').toLowerCase().replace(/\s+/g, ' ').trim(); }
 /** ค้นหาในรายชื่อที่โหลดไว้ — ผลลัพธ์รูปแบบเดียวกับ searchEmployees ของหลังบ้าน */
 function empSearchLocal(list, q, max) {
@@ -226,60 +190,87 @@ function downloadExcel(r) {
 }
 
 /* ================================================================ 4) ป๊อปอัปพิมพ์ */
+/* v2.5 รูปแบบเอกสารเดียวกับ SMC (ชุด 18–20): ฟอนต์ Sarabun · ตัวย่อเวรใหญ่ หนา · 1 section = 1 หน้า A4 ย่อพอดีหน้าด้วย CSS zoom
+ * (ใช้ zoom ไม่ใช้ transform เพื่อให้เครื่องพิมพ์ตัดหน้าตามขนาดที่ย่อแล้วจริง · วัดซ้ำ ≤4 รอบเพราะตัวอักษรจัดบรรทัดใหม่หลังย่อ) */
 var PRINT_CSS =
-  '@import url("https://fonts.googleapis.com/css2?family=Sarabun:wght@400;700&display=swap");' +
-  '*{box-sizing:border-box}html,body{margin:0;background:#e9edf0;font-family:Sarabun,"TH Sarabun New",Tahoma,sans-serif;color:#000}' +
-  '.page{background:#fff;margin:14px auto;padding:10mm;box-shadow:0 2px 12px rgba(0,0,0,.15)}' +
-  '.page.land{width:297mm;min-height:210mm}.page.port{width:210mm;min-height:297mm}' +
-  '.t1{text-align:center;font-weight:700;font-size:15px}.t2{text-align:center;font-weight:700;font-size:14px;margin-top:2px}.t2.left{text-align:left}' +
-  '.t3{font-size:12.5px;margin:4px 0 8px}.t3.c{text-align:center}.b{font-weight:700}' +
-  'table.grid{width:100%;border-collapse:collapse;font-size:10.5px;table-layout:auto}' +
-  '.grid th,.grid td{border:1px solid #444;padding:2px 3px;vertical-align:middle}' +
-  '.grid th{background:#eef3f2;text-align:center;font-weight:700}' +
-  '.grid td.c{text-align:center}.grid td.r{text-align:right;white-space:nowrap}.grid .nm{text-align:left;white-space:nowrap}' +
-  '.grid.sched{table-layout:fixed}.grid.sched td,.grid.sched th{font-size:9.5px;padding:1px 1px;overflow:hidden;word-break:break-all}.grid.sched .nm{white-space:normal;word-break:normal}.grid.sched small{font-size:8px;color:#333}' +
-  '.grid .we{background:#e6eefb}.grid .hol{background:#fbe7ea}' +
-  '.grid tfoot td{background:#f4f6f6;font-weight:700}' +
-  'table.sign{width:100%;margin-top:26px;font-size:12.5px;text-align:center;border:0}.sign td{width:33%;padding:6px;line-height:1.9;border:0}' +
-  '.foot{margin-top:10px;font-size:9px;color:#777}' +
-  '@media print{html,body{background:#fff}.page{margin:0;box-shadow:none;padding:0;width:auto!important;min-height:0!important;page-break-after:always}.page:last-child{page-break-after:auto}' +
-  'thead{display:table-header-group}tr{page-break-inside:avoid}.grid th,.grid .we,.grid .hol,.grid tfoot td{-webkit-print-color-adjust:exact;print-color-adjust:exact}}';
+  '*{box-sizing:border-box}html,body{margin:0;background:#e9edf0;font-family:Sarabun,"TH Sarabun New","TH SarabunPSK",Tahoma,sans-serif;color:#000;font-size:10pt;line-height:1.25}' +
+  '.dp{position:relative;overflow:hidden;background:#fff;display:flex;justify-content:center;align-items:flex-start;margin:12px auto;box-shadow:0 2px 14px rgba(0,0,0,.16);padding:0}' +
+  '.land .dp{width:281mm;height:193mm}.port .dp{width:194mm;height:280mm}.dp.flow{height:auto!important;min-height:0;overflow:visible}' +
+  '.dp-in{width:max-content;flex:none}' +
+  '.dt{font-size:10pt}.dt-h1{text-align:center;font-weight:700;font-size:15pt;line-height:1.35}.dt-h2{text-align:center;font-weight:600;font-size:12.5pt;line-height:1.4}' +
+  '.dt-h3{text-align:center;font-size:11pt;line-height:1.35}.dt-mark{text-align:center;font-weight:600;font-size:10.5pt;color:#b00000;line-height:1.4;margin-bottom:3px}.dt-gap{height:6px}' +
+  '.dt-sub{font-weight:700;font-size:11pt;margin:10px 0 4px}' +
+  '.dt-t{border-collapse:collapse;table-layout:fixed;width:100%;border:1.5px solid #000}' +
+  '.dt-t th,.dt-t td{border:1px solid #444;padding:0 3px;vertical-align:middle;overflow:hidden}' +
+  '.dt-t thead th{background:#efefef;font-size:9.5pt;text-align:center;font-weight:600;line-height:1.15;padding:3px 1px}' +
+  '.dt-t thead th.dn{font-size:10pt;padding:2px 0}.dt-t thead th.dw{font-size:8.5pt;font-weight:400;padding:1px 0}.dt-t thead{border-bottom:1.5px solid #000}' +
+  '.dt-t td{font-size:10.5pt;line-height:1.15}.dt-t td.c{text-align:center}.dt-t td.nm{line-height:1.1;white-space:nowrap;text-overflow:ellipsis}' +
+  '.dt-t td.ps{font-size:8.5pt;line-height:1.05}.dt-t thead th small{font-weight:400;font-size:7.5pt}' +
+  '.dt-t td.nm .n1{font-size:10.5pt;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.dt-t td.nm .n2{font-size:7.5pt;color:#444;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}' +
+  '.dt-t td.d.l3{font-size:10pt}.dt-t td.d.l4{font-size:8.5pt;letter-spacing:-.02em}' +
+  '.dt-t td.d{text-align:center;padding:0;font-size:12.5pt;line-height:1.05}.dt-t td.d b{font-weight:700}.dt-t td.d s{color:#777}' +
+  '.dt-t td.d .dw2{display:block;font-size:7pt;font-weight:400;color:#333;line-height:1.05;white-space:nowrap;overflow:hidden}' +
+  '.dt-t td.t{text-align:center;font-weight:600;font-size:11pt}.dt-t td.t.b{font-weight:700}.dt-t td.a{text-align:right;font-weight:600;padding-right:5px;font-size:10.5pt}' +
+  '.dt-t tr.sum td{background:#f3f3f3;font-weight:600;height:24px;font-size:10pt;border-top:1.5px solid #000}' +
+  '.dt-t tr.sum.q td{font-weight:400;background:#fafafa;border-top:1px solid #777;height:21px;font-size:8pt}.dt-t tr.sum.q1 td{border-top:1.5px solid #000}' +
+  '.dt-t tr.sum.q td.ql{text-align:left;font-size:8.5pt;font-weight:600}.dt-t tr.sum.q td.ql small{font-weight:400;color:#555}' +
+  '.dt-t td.qv{font-size:7.5pt;padding:0;white-space:nowrap}.dt-t td.qv.over{color:#c00000;font-weight:700}' +
+  '.dt-leg{font-size:8.5pt;color:#333;line-height:1.5;margin-top:3px}' +
+  '.ds{display:flex;justify-content:space-around;margin-top:12px}.ds-b{width:31%;text-align:center;font-size:11pt;line-height:1.55}.ds-b .ds-tt{font-weight:600}.ds-b .ds-gap{height:18px}' +
+  '.dt-foot{display:flex;justify-content:space-between;align-items:flex-end;margin-top:10px;font-size:8pt;color:#555}.dt-foot span{font-size:9pt;color:#000;font-style:normal}' +
+  '.drs-note{font-size:9pt;line-height:1.5;margin-top:6px;border:1px solid #999;border-radius:3px;padding:4px 8px;background:#fbfbfb}' +
+  '.dt.ps .dt-t td{font-size:10pt;height:24px}.w2 .dt-t td{height:22px}' +
+  '@media print{html,body{background:#fff}.dp{margin:0;box-shadow:none;break-after:page;page-break-after:always}.dp:last-child{break-after:auto;page-break-after:auto}' +
+  '.dt-t thead{display:table-header-group}.dt-t tr{page-break-inside:avoid}*{-webkit-print-color-adjust:exact;print-color-adjust:exact}}';
+
+/** ย่อแต่ละหน้าให้พอดีกระดาษ (รันในหน้าต่างพิมพ์) */
+var PRINT_FIT = 'function fitPages(){var ps=document.querySelectorAll(".dp");for(var j=0;j<ps.length;j++){var sec=ps[j],inn=sec.firstElementChild,flow=sec.classList.contains("flow");inn.style.zoom=1;' +
+  'var W=sec.clientWidth,H=flow?1e9:sec.clientHeight,k=Math.min(1,W/Math.max(1,inn.scrollWidth),H/Math.max(1,inn.scrollHeight))*0.99;' +
+  'for(var i=0;i<4;i++){inn.style.zoom=k.toFixed(4);var r=inn.getBoundingClientRect(),a=sec.getBoundingClientRect();var over=Math.max(r.width/Math.max(1,a.width),flow?0:r.height/Math.max(1,a.height));if(over<=1)break;k=k/over*0.99;}}}' +
+  'function viewFit(){document.body.style.zoom=1;var p=document.querySelector(".dp");if(!p)return;var z=Math.min(1,(innerWidth-8)/(p.offsetWidth+24));document.body.style.zoom=z}' +
+  'function ready(){var f=document.fonts&&document.fonts.ready?document.fonts.ready:Promise.resolve();Promise.race([f,new Promise(function(r){setTimeout(r,5000)})]).then(function(){fitPages();viewFit();document.body.setAttribute("data-ready","1")})}' +
+  'addEventListener("load",ready);addEventListener("resize",viewFit);addEventListener("beforeprint",function(){document.body.style.zoom=1});addEventListener("afterprint",viewFit);';
 
 function printPopup(doc) {
   var land = doc.orientation !== 'portrait';
   var html = '<!doctype html><html lang="th"><head><meta charset="utf-8"><title>' + h(doc.title) + '</title>' +
-    '<style>@page{size:A4 ' + (land ? 'landscape' : 'portrait') + ';margin:8mm}' + PRINT_CSS + '</style></head><body>' + doc.html +
-    // จอเล็ก (มือถือ): ย่อหน้าเอกสารให้พอดีจอ · ตอนพิมพ์กลับเป็นขนาดจริง
-    '<script>function fit(){var p=document.querySelector(".page");if(!p)return;document.body.style.zoom=1;var z=Math.min(1,(innerWidth-8)/(p.offsetWidth+28));document.body.style.zoom=z}' +
-    'addEventListener("load",fit);addEventListener("resize",fit);addEventListener("beforeprint",function(){document.body.style.zoom=1});addEventListener("afterprint",fit);<\/script></body></html>';
+    '<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Sarabun:ital,wght@0,400;0,600;0,700;1,400&display=swap">' +
+    '<style>@page{size:A4 ' + (land ? 'landscape' : 'portrait') + ';margin:8mm}' + PRINT_CSS + '</style></head><body class="' + (land ? 'land' : 'port') + '">' + doc.html +
+    '<script>' + PRINT_FIT + '<\/script></body></html>';
   var old = $('prOv'); if (old) old.remove();
   var ov = document.createElement('div'); ov.id = 'prOv'; ov.className = 'pr-ov';
-  ov.innerHTML = '<div class="pr-bar"><i class="bi bi-printer"></i><b class="text-truncate">' + h(doc.title) + '</b><span class="ms-auto"></span>' +
+  ov.innerHTML = '<div class="pr-bar"><i class="bi bi-printer"></i><b class="text-truncate">' + h(doc.title) + '</b>' + (doc.pages ? '<span class="tag t-info d-none d-md-inline-flex">' + doc.pages + ' หน้า</span>' : '') + '<span class="ms-auto"></span>' +
     '<button class="btn btn-brand" id="prGo"><i class="bi bi-printer"></i> พิมพ์ / บันทึกเป็น PDF</button>' +
     '<button class="btn btn-ghost" id="prTab" title="เปิดในแท็บใหม่"><i class="bi bi-box-arrow-up-right"></i><span class="d-none d-md-inline"> แท็บใหม่</span></button>' +
     '<button class="btn btn-ghost btn-icon" id="prX" title="ปิด"><i class="bi bi-x-lg"></i></button></div>' +
-    '<div class="pr-hint"><i class="bi bi-info-circle"></i> กด “พิมพ์” แล้วเลือกเครื่องพิมพ์ หรือเลือก “บันทึกเป็น PDF” เพื่อเก็บเป็นไฟล์ · ตั้งกระดาษ A4 ' + (land ? 'แนวนอน' : 'แนวตั้ง') + '</div>' +
+    '<div class="pr-hint"><i class="bi bi-info-circle"></i> กด “พิมพ์” แล้วเลือกเครื่องพิมพ์ หรือเลือก “บันทึกเป็น PDF” เพื่อเก็บเป็นไฟล์ · กระดาษ A4 ' + (land ? 'แนวนอน' : 'แนวตั้ง') + ' · ระบบย่อให้พอดี 1 หน้าอัตโนมัติ (ตั้งขนาด 100% / ค่าเริ่มต้น)</div>' +
     '<iframe id="prFrame" title="ตัวอย่างก่อนพิมพ์"></iframe>';
   document.body.appendChild(ov);
   document.body.classList.add('pr-open');
   var fr = $('prFrame');
   fr.srcdoc = html;
-  var close = function () { ov.remove(); document.body.classList.remove('pr-open'); document.removeEventListener('keydown', esc); };
+  var close = function () { ov.remove(); document.body.classList.remove('pr-open'); document.removeEventListener('keydown', esc); try { uiCleanupPT(); } catch (e) { } };
   var esc = function (e) { if (e.key === 'Escape') close(); };
   document.addEventListener('keydown', esc);
   $('prX').addEventListener('click', close);
   $('prGo').addEventListener('click', function () {
     var w = fr.contentWindow;
     var go = function () { try { w.focus(); w.print(); } catch (e) { openTab(); } };
-    try { (w.document.fonts && w.document.fonts.ready ? w.document.fonts.ready : Promise.resolve()).then(go); } catch (e) { go(); }
+    var wait = function (n) { if (n <= 0 || (w.document.body && w.document.body.getAttribute('data-ready'))) go(); else setTimeout(function () { wait(n - 1); }, 150); };
+    wait(40);
   });
   var openTab = function () {
-    var url = URL.createObjectURL(new Blob([html.replace('</body>', '<script>window.onload=function(){setTimeout(function(){print()},400)}<\/script></body>')], { type: 'text/html' }));
+    var url = URL.createObjectURL(new Blob([html.replace('</body>', '<script>addEventListener("load",function(){var t=setInterval(function(){if(document.body.getAttribute("data-ready")){clearInterval(t);print()}},200)})<\/script></body>')], { type: 'text/html' }));
     var w = window.open(url, '_blank');
     if (!w) alertBox('เบราว์เซอร์บล็อกหน้าต่างใหม่', 'กรุณาอนุญาตป๊อปอัปสำหรับเว็บนี้ หรือกดปุ่ม “พิมพ์” แทน', 'info');
     setTimeout(function () { URL.revokeObjectURL(url); }, 120000);
   };
   $('prTab').addEventListener('click', openTab);
+}
+/** กันชั้นโปร่งใสค้างหลังพิมพ์ (บทเรียน SMC 1 ต.ค. 69) */
+function uiCleanupPT() {
+  if (window.Swal && !Swal.isVisible()) { $$('.swal2-container').forEach(function (x) { x.remove(); }); document.body.classList.remove('swal2-shown', 'swal2-height-auto'); }
+  if (!document.querySelector('.modal.show')) { $$('.modal-backdrop').forEach(function (x) { x.remove(); }); document.body.classList.remove('modal-open'); document.body.style.overflow = ''; document.body.style.paddingRight = ''; }
 }
 
 /* ================================================================ 5) เปิดไฟล์แนบ (ไม่ผ่านลิงก์ Google Drive) */

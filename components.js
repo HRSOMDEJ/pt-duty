@@ -360,8 +360,10 @@ function openCellPop(opt) {
     var d = defs.map[c], t = d ? m2hm(d.start) + '–' + m2hm(d.end, true) : shiftTextJs(c, opt.date);
     return '<button type="button" data-c="' + h(c) + '" title="' + h(d ? d.name + ' ' + t + ' · ' + d.value + ' เวร' : t) + '"' + (c === opt.code ? ' class="on"' : '') + '>' + h(c) + (d ? '<small>' + t.replace(/:00/g, '') + '</small>' : '') + '</button>';
   };
+  var ro = !!opt.readonly;
   pop.innerHTML =
-    '<div class="pt">' + h(opt.title || 'เลือกเวร') + '</div>' + (opt.sub ? '<div class="small-muted" style="margin:-6px 0 8px">' + opt.sub + '</div>' : '') +
+    '<div class="pt">' + h(opt.title || 'เลือกเวร') + '</div>' + (opt.sub ? '<div class="small-muted" style="margin:-6px 0 8px">' + opt.sub + '</div>' : '') + (opt.extra || '') +
+    (ro ? '<div class="mb-2">' + (opt.code ? shiftBadge(opt.code) + ' <b>' + h(shiftTextJs(opt.code, opt.date)) + '</b>' + (opt.wardId ? ' · ' + h(wardName(opt.wardId)) : '') : '<span class="small-muted">ไม่มีเวรวันนี้</span>') + '</div>' :
     '<h4><i class="bi bi-clock"></i> เต็มเวร</h4><div class="qs">' + singles.map(btn).join('') + '<button type="button" class="clr" data-c=""><i class="bi bi-eraser"></i> ล้าง</button></div>' +
     (halves.length ? '<h4><i class="bi bi-circle-half"></i> ครึ่งเวร / บางช่วง</h4><div class="qs">' + halves.map(btn).join('') + '</div>' : '') +
     (combos.length ? '<h4><i class="bi bi-layers"></i> เวรผสม <span class="small-muted" style="font-weight:400">— หรือพิมพ์รหัสต่อกันเองในตาราง</span></h4><div class="qs">' + combos.map(btn).join('') + '</div>' : '') +
@@ -375,8 +377,9 @@ function openCellPop(opt) {
           return '<option value="' + w.wardId + '"' + (w.wardId === opt.wardId ? ' selected' : '') + (home ? ' disabled' : '') + '>' + h(w.name) + (home ? ' (ต้นสังกัด — ลงไม่ได้)' : '') + '</option>';
         }).join('') + '</select>' +
         '<div class="hint"><i class="bi bi-lightbulb"></i> พิมพ์ในช่องตารางว่า <b>ช/19A</b> ก็ระบุหน่วยได้เช่นกัน</div>'
-      : '') +
-    '<div class="r2"><button type="button" class="btn btn-sm btn-ghost" data-cancel>ปิด</button><button type="button" class="btn btn-sm btn-brand" data-ok><i class="bi bi-check2"></i> ใช้ค่านี้</button></div>';
+      : '')) +
+    '<div class="r2">' + (opt.attach ? '<button type="button" class="btn btn-sm btn-soft me-auto" data-att><i class="bi bi-paperclip"></i> ใบลืมสแกน' + (opt.attach.n ? ' <span class="tag t-acc">มีแล้ว</span>' : '') + '</button>' : '') +
+    '<button type="button" class="btn btn-sm btn-ghost" data-cancel>ปิด</button>' + (ro ? '' : '<button type="button" class="btn btn-sm btn-brand" data-ok><i class="bi bi-check2"></i> ใช้ค่านี้</button>') + '</div>';
   document.body.appendChild(pop);
   POP = pop;
 
@@ -411,6 +414,9 @@ function openCellPop(opt) {
   var wsel = pop.querySelector('#popWard');
   if (wsel) wsel.addEventListener('dblclick', function () { pop.querySelector('[data-ok]').click(); });
   pop.querySelector('[data-cancel]').addEventListener('click', closePop);
+  var ab = pop.querySelector('[data-att]');
+  if (ab) ab.addEventListener('click', function () { closePop(); opt.attach.go(); });
+  if (ro) return;
   pop.querySelector('[data-ok]').addEventListener('click', function () {
     var w = pop.querySelector('#popWard');
     opt.onPick(chosen, w ? w.value : opt.wardId);
